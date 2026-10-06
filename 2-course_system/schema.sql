@@ -51,6 +51,7 @@ CREATE TABLE progress (
 );
 
 
+
 INSERT INTO learner (name, email, join_date) VALUES
 ('Sompong Jaidee', 'sompong.j@example.com', '2026-01-05'),
 ('Kanya Rattana', 'kanya.r@example.com', '2026-01-10'),
