@@ -11,7 +11,7 @@ DB_NAME = "prymania_s...."              # TODO: ชื่อฐานข้อ�
 DB_PORT = 3306
 
 # ★ ถ้าใช้ MySQL ในเครื่องตัวเอง (ดูคู่มือหน้า 12) ให้ใช้ค่านี้แทน 4 บรรทัดบน
-# DB_HOST = "localhost"
-# DB_USER = "root"
-# DB_PASSWORD = "abcd1234"
-# DB_NAME = "project69"
+DB_HOST = "localhost"
+DB_USER = "root"
+DB_PASSWORD = "122549"
+DB_NAME = "mysql"
