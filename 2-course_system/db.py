@@ -80,22 +80,29 @@ def create_learner(data):
     sql = ("INSERT INTO learner (name, email, join_date) VALUES (%s,%s,%s)")
     params = (  data["name"],
                 data["email"],
-                data["join_date"]         
+                data["join_date"]     
     )
-    new = run_query(sql,params)
-    return new
-    # TODO: INSERT INTO learner (...) VALUES (%s, ...)
-    _todo("create_learner")
-
-
+    return run_command(sql,params)
+    
 def update_learner(learner_id, data):
     """แก้ไข ผู้เรียน ตาม learner_id"""
+    sql = ("UPDATE learner SET name = %s, email = %s, join_date = %s WHERE learner_id=%s")
+    params = (
+        data["name"],
+        data["email"],
+        data["join_date"],
+        learner_id,
+    )
+    return run_command(sql,params)
     # TODO: UPDATE learner SET ... WHERE learner_id=%s
     _todo("update_learner")
 
 
 def delete_learner(learner_id):
     """ลบ ผู้เรียน ตาม learner_id"""
+    sql = ("DELETE FROM learner WHERE learner_id=%s")
+    params = (learner_id,)
+    return run_command(sql,params)
     # TODO: DELETE FROM learner WHERE learner_id=%s
     _todo("delete_learner")
 
@@ -109,6 +116,38 @@ def search_courses(filters):
                    (ใช้ COUNT(คอลัมน์) ไม่ใช่ COUNT(*) — คอร์สที่ไม่มีผู้เรียนจะได้ 0)
         วิธีที่ 2: subquery ใน SELECT: (SELECT COUNT(*) FROM enrollment e WHERE e.course_id = c.course_id)
       - title/category ใช้ LIKE %s"""
+    sql = (
+        """
+            SELECT c.course_id, 
+                c.title, 
+                c.category, 
+                c.price, 
+                c.prerequisite_id,
+                COUNT(e.learner_id) AS learner_count
+            FROM course c
+            LEFT JOIN enrollment e ON c.course_id = e.course_id
+            where 1 = 1
+        """
+      )
+    params = []
+    if filters.get("title"):
+        sql += " and title like %s"
+        params.append("%" + filters["title"] + "%")
+    if filters.get("category"):
+        sql += " and category like %s"
+        params.append("%" + filters["category"] + "%")
+    sql +=  """
+            Group by  c.course_id, 
+                    c.title, 
+                    c.category, 
+                    c.price, 
+                    c.prerequisite_id
+            """
+    if filters.get("learner_id"):
+        sql += " and learner_id like %s"
+        params.append("%" + filters["learner_id"] + "%")
+
+    return run_query(sql , params)
     # TODO: เขียน SQL ค้นหาแบบยืดหยุ่นตาม filters (ใช้ %s เสมอ)
     _todo("search_courses")
 

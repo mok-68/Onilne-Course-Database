@@ -108,3 +108,5 @@ INSERT INTO enrollment (learner_id, course_id, enroll_date, status) VALUES
 (3, 1, '2026-01-15', 'completed'), -- Nattapong เรียน Python จบแล้ว
 (3, 2, '2026-01-28', 'completed'), -- Nattapong เรียน Data Struct จบแล้ว
 (3, 3, '2026-02-02', 'studying')  -- Nattapong ขึ้น
+
+
