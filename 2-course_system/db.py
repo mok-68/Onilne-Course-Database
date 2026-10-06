@@ -42,18 +42,48 @@ def search_learners(filters):
     """ค้นหา ผู้เรียน ตามเงื่อนไข (name, email)
     คำใบ้: เริ่มจาก sql = "SELECT * FROM learner WHERE 1=1"
     แล้วต่อเงื่อนไขเฉพาะ filter ที่มีค่า (ข้อความใช้ LIKE %s, อื่น ๆ ใช้ = %s)"""
+    sql =(
+        """
+        select * from learner where 1 = 1
+        """
+    )
+    params = []
+    if filters.get("learner_id"):
+        sql += " and learner_id like %s"
+        params.append("%" + filters["learner_id"] + "%")
+    if filters.get("name"):
+        sql += " and name like %s"
+        params.append("%" + filters["name"] + "%")
+    if filters.get("email"):
+        sql += " and email like %s"
+        params.append("%" + filters["email"] + "%")
+    if filters.get("join_date"):
+        sql += " and join_date like %s"
+        params.append("%" + filters["join_date"] + "%")
+    return run_query(sql,params)
+    
     # TODO: เขียน SQL ค้นหาแบบยืดหยุ่นตาม filters (ใช้ %s เสมอ)
     _todo("search_learners")
 
 
 def get_learner(learner_id):
     """ดึง ผู้เรียน 1 รายการตาม learner_id (ใช้ตอนเปิดฟอร์มแก้ไข)"""
+    sql = ("SELECT * FROM learner WHERE learner_id = %s")
+    params = (learner_id,)
+    return run_query(sql,params)
     # TODO: SELECT * FROM learner WHERE learner_id = %s แล้วคืนแถวเดียว
     _todo("get_learner")
 
 
 def create_learner(data):
     """เพิ่ม ผู้เรียน ใหม่ — data มีคีย์: name, email, join_date"""
+    sql = ("INSERT INTO learner (name, email, join_date) VALUES (%s,%s,%s)")
+    params = (  data["name"],
+                data["email"],
+                data["join_date"]         
+    )
+    new = run_query(sql,params)
+    return new
     # TODO: INSERT INTO learner (...) VALUES (%s, ...)
     _todo("create_learner")
 
