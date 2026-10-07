@@ -12,40 +12,43 @@
 DROP TABLE IF EXISTS progress;
 DROP TABLE IF EXISTS enrollment;
 DROP TABLE IF EXISTS lesson;
+DROP TABLE IF EXISTS certificate;
 DROP TABLE IF EXISTS course;
 DROP TABLE IF EXISTS learner;
 
+
 CREATE TABLE learner (
-    learner_id INT AUTO_INCREMENT PRIMARY KEY,
-    name VARCHAR(100) NOT NULL,
-    email VARCHAR(100) UNIQUE NOT NULL,
-    join_date DATE NOT NULL
+    learner_id  INT AUTO_INCREMENT PRIMARY KEY,
+    name        VARCHAR(100)   NOT NULL,
+    email       VARCHAR(100)  UNIQUE NOT NULL,
+    join_date   DATE NOT NULL
 );
 
 CREATE TABLE course (
-    course_id INT AUTO_INCREMENT PRIMARY KEY,
-    title VARCHAR(150) NOT NULL,
-    category VARCHAR(50) NOT NULL,
-    price DECIMAL(10, 2) NOT NULL DEFAULT 0.00,
+    course_id       INT AUTO_INCREMENT PRIMARY KEY,
+    title           VARCHAR(150) NOT NULL,
+    category        VARCHAR(50) NOT NULL,
+    price           DECIMAL(10, 2) NOT NULL DEFAULT 0.00,
     prerequisite_id INT NULL,
+    description     TEXT,
     FOREIGN KEY (prerequisite_id) REFERENCES course(course_id) ON DELETE SET NULL
 );
 
 CREATE TABLE lesson (
-    lesson_id INT AUTO_INCREMENT PRIMARY KEY,
-    course_id INT NOT NULL,
-    title VARCHAR(150) NOT NULL,
-    sec_no INT NOT NULL,
-    duration_min INT NOT NULL,
+    lesson_id       INT AUTO_INCREMENT PRIMARY KEY,
+    course_id       INT NOT NULL,
+    title           VARCHAR(150) NOT NULL,
+    sec_no          INT NOT NULL,
+    duration_min    INT NOT NULL,
     FOREIGN KEY (course_id) REFERENCES course(course_id) ON DELETE CASCADE
 );
 
 
 CREATE TABLE enrollment (
-    enroll_id INT AUTO_INCREMENT PRIMARY KEY,
-    learner_id INT NOT NULL,
-    course_id INT NOT NULL,
-    enroll_date DATE NOT NULL,
+    enroll_id       INT AUTO_INCREMENT PRIMARY KEY,
+    learner_id      INT NOT NULL,
+    course_id       INT NOT NULL,
+    enroll_date     DATE NOT NULL,
     status ENUM('studying', 'completed') NOT NULL DEFAULT 'studying',
     FOREIGN KEY (learner_id) REFERENCES learner(learner_id) ON DELETE CASCADE,
     FOREIGN KEY (course_id) REFERENCES course(course_id) ON DELETE CASCADE,
@@ -53,14 +56,27 @@ CREATE TABLE enrollment (
 );
 
 CREATE TABLE progress (
-    learner_id INT NOT NULL,
-    lesson_id INT NOT NULL,
-    watched BOOLEAN NOT NULL DEFAULT FALSE,
-    completed_date DATETIME NULL,
+    learner_id      INT NOT NULL,
+    lesson_id       INT NOT NULL,
+    watched         BOOLEAN NOT NULL DEFAULT FALSE,
+    completed_date  DATETIME NULL,
     PRIMARY KEY (learner_id, lesson_id),
     FOREIGN KEY (learner_id) REFERENCES learner(learner_id) ON DELETE CASCADE,
     FOREIGN KEY (lesson_id) REFERENCES lesson(lesson_id) ON DELETE CASCADE
 );
+
+CREATE TABLE certificate (
+    cer_id      INT AUTO_INCREMENT PRIMARY KEY,
+    ln_name     VARCHAR(100),
+    learner_id  INT NOT NULL,
+    course_id   INT NOT NULL,
+    cou_title   VARCHAR(150),
+    issue_date  DATE NOT NULL DEFAULT CURRENT_DATE,
+    FOREIGN KEY (learner_id)    REFERENCES learner (learner_id) ON DELETE CASCADE,
+    FOREIGN KEY (course_id)     REFERENCES course   (course_id) ON DELETE CASCADE
+    
+);
+
 
 
 
@@ -104,6 +120,11 @@ INSERT INTO enrollment (learner_id, course_id, enroll_date, status) VALUES
 (2, 4, '2026-01-11', 'studying'),  
 (3, 1, '2026-01-15', 'completed'), 
 (3, 2, '2026-01-28', 'completed'), 
-(3, 3, '2026-02-02', 'studying')  
+(3, 3, '2026-02-02', 'studying');
+
+INSERT INTO certificate (ln_name, learner_id, course_id, cou_title, issue_date) VALUES
+('Sompong Jaidee', 1, 1, 'Python for Beginners', '2026-01-15'),
+('Nattapong Dev', 3, 1, 'Python for Beginners', '2026-01-27'),
+('Nattapong Dev', 3, 2, 'Data Structure & Algorithms with Python', '2026-02-01');
 
 
