@@ -126,28 +126,20 @@ def search_courses(filters):
                 COUNT(e.learner_id) AS learner_count
             FROM course c
             LEFT JOIN enrollment e ON c.course_id = e.course_id
-            where 1 = 1
+            WHERE 1 = 1
         """
       )
     params = []
     if filters.get("title"):
-        sql += " and title like %s"
+        sql += " AND c.title LIKE %s"
         params.append("%" + filters["title"] + "%")
     if filters.get("category"):
-        sql += " and category like %s"
+        sql += " AND c.category LIKE %s"
         params.append("%" + filters["category"] + "%")
-    sql +=  """
-            Group by  c.course_id, 
-                    c.title, 
-                    c.category, 
-                    c.price, 
-                    c.prerequisite_id
+    sql += """
+            GROUP BY c.course_id, c.title, c.category, c.price, c.prerequisite_id
             """
-    if filters.get("learner_id"):
-        sql += " and learner_id like %s"
-        params.append("%" + filters["learner_id"] + "%")
-
-    return run_query(sql , params)
+    return run_query(sql, params)
     # TODO: เขียน SQL ค้นหาแบบยืดหยุ่นตาม filters (ใช้ %s เสมอ)
     _todo("search_courses")
 
@@ -202,17 +194,17 @@ def search_enrollments(filters):
     """ค้นหา การลงทะเบียน ตามเงื่อนไข (learner_id, course_id, status)
     คำใบ้: เริ่มจาก sql = "SELECT * FROM enrollment WHERE 1=1"
     แล้วต่อเงื่อนไขเฉพาะ filter ที่มีค่า (ข้อความใช้ LIKE %s, อื่น ๆ ใช้ = %s)"""
-    sql = ("select * from enrollment where 1 = 1")
+    sql = "SELECT * FROM enrollment WHERE 1 = 1"
     params = []
     if filters.get("learner_id"):
-        sql += " and learner_id like %s"
-        params.append("%" + filters["learner_id"] + "%")
+        sql += " AND learner_id = %s"
+        params.append(filters["learner_id"])
     if filters.get("course_id"):
-        sql += " and course_id like %s"
-        params.append("%" + filters["course_id"] + "%")
+        sql += " AND course_id = %s"
+        params.append(filters["course_id"])
     if filters.get("status"):
-        sql = (" and status like %s")
-        params.append("%" + filters["status"] + "%")
+        sql += " AND status = %s"
+        params.append(filters["status"])
 
     return run_query(sql,params)
     # TODO: เขียน SQL ค้นหาแบบยืดหยุ่นตาม filters (ใช้ %s เสมอ)
@@ -241,34 +233,31 @@ def check_can_enroll(learner_id, course_id, enroll_id=None):
        → ผู้เรียนต้องมี enrollment ของวิชานั้นที่ status = 'completed' แล้ว
          (หา prerequisite_id จากตาราง course ก่อน แล้วตรวจด้วย EXISTS หรือ COUNT)
     ตัวอย่าง: raise ValueError("ต้องเรียนวิชาที่ต้องเรียนก่อนให้จบก่อน")"""
-    # sqlfirst = ("select * from enrollment")
-    # if not enroll_id:
-    #     raise ValueError("กรุณาลงทะเบียน")
-    # count_sub =  run_query( sql =   ("""select * from enrollment
-    #             where learner_id = %s and course_id = %s and enroll_id <> %s
-    #         """))
-    # if count_sub <= 0:
-    #     enroll_id = 0
+    eid = enroll_id or 0
+    dup = run_query(
+        "SELECT COUNT(*) AS n FROM enrollment WHERE learner_id = %s AND course_id = %s AND enroll_id <> %s",
+        (learner_id, course_id, eid))
+    if dup and dup[0]["n"] > 0:
+        raise ValueError("ผู้เรียนคนนี้ลงทะเบียนคอร์สนี้แล้ว")
 
-    # pre_check = ("select * from ")
-    # if 
-    
-
-
-
-
-    
-    # TODO: เขียนการตรวจ 2 ข้อตามคำใบ้
-    _todo("check_can_enroll")
-
+    pre = run_query("SELECT prerequisite_id FROM course WHERE course_id = %s", (course_id,))
+    prereq = pre[0]["prerequisite_id"] if pre else None
+    if prereq is not None:
+        done = run_query(
+            "SELECT COUNT(*) AS n FROM enrollment WHERE learner_id = %s AND course_id = %s AND status = 'completed'",
+            (learner_id, prereq))
+        if not done or done[0]["n"] == 0:
+            raise ValueError("ต้องเรียนวิชาที่ต้องเรียนก่อนให้จบก่อน")
 
 def create_enrollment(data):
     """เพิ่ม การลงทะเบียน ใหม่ — data มีคีย์: learner_id, course_id, enroll_date, status
     คำใบ้:
       1) เรียก check_can_enroll(data["learner_id"], data["course_id"]) ก่อน
       2) INSERT INTO enrollment (...) VALUES (%s, ...)"""
-    # TODO: เขียนตามคำใบ้
-    _todo("create_enrollment")
+    check_can_enroll(data["learner_id"], data["course_id"])
+    sql = "INSERT INTO enrollment (learner_id, course_id, enroll_date, status) VALUES (%s, %s, %s, %s)"
+    params = (data["learner_id"], data["course_id"], data["enroll_date"], data.get("status") or "studying")
+    return run_command(sql, params)
 
 
 def update_enrollment(enroll_id, data):
@@ -278,14 +267,21 @@ def update_enrollment(enroll_id, data):
          check_can_enroll(data["learner_id"], data["course_id"], enroll_id)
          (แก้แค่สถานะ เช่น studying → completed ไม่ต้องตรวจ)
       2) UPDATE enrollment SET ... WHERE enroll_id=%s"""
-    # TODO: เขียนตามคำใบ้
-    _todo("update_enrollment")
+    old = get_enrollment(enroll_id)
+    if not old:
+        raise ValueError("ไม่พบข้อมูลการลงทะเบียน")
+    old = old[0]
+    if str(data.get("learner_id")) != str(old["learner_id"]) or str(data.get("course_id")) != str(old["course_id"]):
+        check_can_enroll(data["learner_id"], data["course_id"], enroll_id)
+    sql = "UPDATE enrollment SET learner_id = %s, course_id = %s, enroll_date = %s, status = %s WHERE enroll_id = %s"
+    params = (data["learner_id"], data["course_id"], data["enroll_date"], data.get("status") or "studying", enroll_id)
+    return run_command(sql, params)
 
 
 def delete_enrollment(enroll_id):
     """ลบ การลงทะเบียน ตาม enroll_id"""
-    # TODO: DELETE FROM enrollment WHERE enroll_id=%s
-    _todo("delete_enrollment")
+    sql = "DELETE FROM enrollment WHERE enroll_id = %s"
+    return run_command(sql, (enroll_id,))
 
 
 # ============================================================

@@ -1,4 +1,4 @@
--- Active: 1789545435044@@127.0.0.1@3306@gym_db
+-- Active: 1789545435044@@127.0.0.1@3306@68011212008
 -- ============================================================
 --  1. CREATE TABLES (โครงสร้างตารางสมบูรณ์)
 -- ============================================================
@@ -122,11 +122,26 @@ INSERT INTO enrollment (learner_id, course_id, enroll_date, status) VALUES
 (2, 4, '2026-01-11', 'studying'),  
 (3, 1, '2026-01-15', 'completed'), 
 (3, 2, '2026-01-28', 'completed'), 
-(3, 3, '2026-02-02', 'studying');
+(3, 3, '2026-02-02', 'studying'),
+(4, 5, '2026-02-03', 'completed'),
+(5, 1, '2026-01-18', 'completed');
+
+INSERT INTO progress (learner_id, lesson_id, watched, completed_date) VALUES
+(1, 1, TRUE, '2026-01-10 14:00:00'),
+(1, 2, TRUE, '2026-01-14 10:30:00'),
+(1, 3, TRUE, '2026-01-25 09:00:00'),
+(1, 4, FALSE, NULL),
+(2, 6, TRUE, '2026-01-15 10:00:00'),
+(3, 1, TRUE, '2026-01-20 16:00:00'),
+(3, 2, TRUE, '2026-01-24 11:00:00'),
+(3, 3, TRUE, '2026-01-30 13:00:00'),
+(3, 4, TRUE, '2026-02-01 15:00:00');
 
 INSERT INTO certificate (ln_name, learner_id, course_id, cou_title, issue_date) VALUES
 ('Sompong Jaidee', 1, 1, 'Python for Beginners', '2026-01-15'),
 ('Nattapong Dev', 3, 1, 'Python for Beginners', '2026-01-27'),
-('Nattapong Dev', 3, 2, 'Data Structure & Algorithms with Python', '2026-02-01');
+('Nattapong Dev', 3, 2, 'Data Structure & Algorithms with Python', '2026-02-01'),
+('Preeya Chaitai', 4, 5, 'Database Systems & SQL Essentials', '2026-02-10'),
+('Chaiwat Tech', 5, 1, 'Python for Beginners', '2026-01-25');
 
 
