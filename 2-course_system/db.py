@@ -284,6 +284,78 @@ def delete_enrollment(enroll_id):
     return run_command(sql, (enroll_id,))
 
 
+
+# ---------- certificate ----------
+def search_certificates(filters):
+    """ค้นหาใบรับรอง  แสดงชื่อผู้เรียน ชื่อคอร์ส ไม่เก็บชื่อซ้ำในตาราง"""
+    sql = """
+        SELECT ce.cer_id,
+               ce.learner_id,
+               l.name           AS learner_name,
+               ce.course_id,
+               c.category        AS course_title,
+               cert.issue_date
+        FROM certificate cert
+        JOIN learner l ON l.learner_id = ce.learner_id
+        JOIN course  c ON c.course_id  = ce.course_id
+        WHERE 1 = 1
+    """
+    params = []
+    if filters.get("learner_id"):
+        sql += " AND cert.learner_id = %s"
+        params.append(filters["learner_id"])
+    if filters.get("name"):
+            sql += " AND l.name = %s"
+            params.append(filters["issue_date"])
+    if filters.get("course_id"):
+        sql += " AND cert.course_id = %s"
+        params.append(filters["course_id"])
+    
+    return run_query(sql, params)
+
+
+def get_certificate(cer_id):
+    """ดึงใบรับรอง 1 รายการตาม cer_id """
+    sql = "SELECT * FROM certificate WHERE cer_id = %s"
+    return run_query(sql, (cer_id,))
+
+
+def create_certificate(data):
+    """ออกใบรับรองใหม่ — ต้องเรียนคอร์สนั้นจบแล้วเท่านั้น"""
+    done = run_query(
+        "SELECT COUNT(*) AS n FROM enrollment WHERE learner_id = %s AND course_id = %s AND status = 'completed'",
+        (data["learner_id"], data["course_id"]))
+    if not done or done[0]["n"] == 0:
+        raise ValueError("ผู้เรียนยังเรียนคอร์สนี้ไม่จบ จึงออกใบรับรองไม่ได้")
+
+    exist = run_query(
+        "SELECT COUNT(*) AS n FROM certificate WHERE learner_id = %s AND course_id = %s",
+        (data["learner_id"], data["course_id"]))
+    if exist and exist[0]["n"] > 0:
+        raise ValueError("ผู้เรียนคนนี้มีใบรับรองของคอร์สนี้แล้ว")
+
+    issue_date = data.get("issue_date")
+    if issue_date in ("", None):
+        sql = "INSERT INTO certificate (learner_id, course_id) VALUES (%s, %s)"
+        params = (data["learner_id"], data["course_id"])
+    else:
+        sql = "INSERT INTO certificate (learner_id, course_id, issue_date) VALUES (%s, %s, %s)"
+        params = (data["learner_id"], data["course_id"], issue_date)
+    return run_command(sql, params)
+
+
+def update_certificate(cer_id, data):
+    """แก้ไขใบรับรองตาม cer_id"""
+    sql = "UPDATE certificate SET learner_id = %s, course_id = %s, issue_date = %s WHERE cer_id = %s"
+    params = (data["learner_id"], data["course_id"], data["issue_date"], cer_id)
+    return run_command(sql, params)
+
+
+def delete_certificate(cer_id):
+    """ลบใบรับรองตาม cer_id"""
+    sql = "DELETE FROM certificate WHERE cer_id = %s"
+    return run_command(sql, (cer_id,))
+
 # ============================================================
 #  REPORT (รายงาน — ใช้ JOIN + GROUP BY + subquery)
 #  ★ ชื่อคอลัมน์ใน SELECT จะกลายเป็นหัวตารางบนเว็บ — ใช้ AS 'ชื่อภาษาไทย' ได้
