@@ -1,4 +1,4 @@
--- Active: 1789545435044@@127.0.0.1@3306@68011212008
+-- Active: 1791274003397@@127.0.0.1@3306@onile_course
 -- ============================================================
 --  1. CREATE TABLES (โครงสร้างตารางสมบูรณ์)
 -- ============================================================
@@ -69,13 +69,12 @@ CREATE TABLE progress (
 
 CREATE TABLE certificate (
     cer_id      INT AUTO_INCREMENT PRIMARY KEY,
-    ln_name     VARCHAR(100),
     learner_id  INT NOT NULL,
     course_id   INT NOT NULL,
-    cou_title   VARCHAR(150),
     issue_date  DATE NOT NULL DEFAULT (CURRENT_DATE),
     FOREIGN KEY (learner_id)    REFERENCES learner (learner_id) ON DELETE CASCADE,
-    FOREIGN KEY (course_id)     REFERENCES course   (course_id) ON DELETE CASCADE
+    FOREIGN KEY (course_id)     REFERENCES course   (course_id) ON DELETE CASCADE,
+    UNIQUE (learner_id, course_id)
     
 );
 
@@ -137,11 +136,11 @@ INSERT INTO progress (learner_id, lesson_id, watched, completed_date) VALUES
 (3, 3, TRUE, '2026-01-30 13:00:00'),
 (3, 4, TRUE, '2026-02-01 15:00:00');
 
-INSERT INTO certificate (ln_name, learner_id, course_id, cou_title, issue_date) VALUES
-('Sompong Jaidee', 1, 1, 'Python for Beginners', '2026-01-15'),
-('Nattapong Dev', 3, 1, 'Python for Beginners', '2026-01-27'),
-('Nattapong Dev', 3, 2, 'Data Structure & Algorithms with Python', '2026-02-01'),
-('Preeya Chaitai', 4, 5, 'Database Systems & SQL Essentials', '2026-02-10'),
-('Chaiwat Tech', 5, 1, 'Python for Beginners', '2026-01-25');
+INSERT INTO certificate ( learner_id, course_id, issue_date) VALUES
+( 1, 1,  '2026-01-15'),
+( 3, 1,  '2026-01-27'),
+( 3, 2,  '2026-02-01'),
+( 4, 5,  '2026-02-10'),
+( 5, 1,  '2026-01-25');
 
 
