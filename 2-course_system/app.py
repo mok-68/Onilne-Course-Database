@@ -113,24 +113,24 @@ def enrollment_delete(_id):
     return safe(db.delete_enrollment, _id)
 
 # ---- certificate ----
-@app.route("/api/certificates", methods=["GET"])
+@app.route("/api/certificate", methods=["GET"])
 def certificates_list():
     filters = {k: v for k, v in request.args.items() if v}
     return safe(db.search_certificates, filters)
 
-@app.route("/api/certificates/<int:_id>", methods=["GET"])
+@app.route("/api/certificate/<int:_id>", methods=["GET"])
 def certificate_get(_id):
     return safe(db.get_certificate, _id)
 
-@app.route("/api/certificates", methods=["POST"])
+@app.route("/api/certificate", methods=["POST"])
 def certificate_create():
     return safe(db.create_certificate, request.json)
 
-@app.route("/api/certificates/<int:_id>", methods=["PUT"])
+@app.route("/api/certificate/<int:_id>", methods=["PUT"])
 def certificate_update(_id):
     return safe(db.update_certificate, _id, request.json)
 
-@app.route("/api/certificates/<int:_id>", methods=["DELETE"])
+@app.route("/api/certificate/<int:_id>", methods=["DELETE"])
 def certificate_delete(_id):
     return safe(db.delete_certificate, _id)
     

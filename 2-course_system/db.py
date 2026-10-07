@@ -286,7 +286,7 @@ def delete_enrollment(enroll_id):
 
 
 # ---------- certificate ----------
-def search_certificates(filters):
+def search_certificate(filters):
     """ค้นหาใบรับรอง  แสดงชื่อผู้เรียน ชื่อคอร์ส ไม่เก็บชื่อซ้ำในตาราง"""
     sql = """
         SELECT ce.cer_id,
