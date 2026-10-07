@@ -29,6 +29,7 @@ CREATE TABLE lesson (
     FOREIGN KEY (course_id) REFERENCES course(course_id) ON DELETE CASCADE
 );
 
+
 CREATE TABLE enrollment (
     enroll_id INT AUTO_INCREMENT PRIMARY KEY,
     learner_id INT NOT NULL,
