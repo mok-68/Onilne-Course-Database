@@ -1,5 +1,4 @@
-<<<<<<< HEAD
--- Active: 1791274003397@@127.0.0.1@3306@onile_course
+-- Active: 1791274003397@@127.0.0.1@3306@68011212008
 -- ============================================================
 --  1. CREATE TABLES (โครงสร้างตารางสมบูรณ์)
 -- ============================================================
@@ -10,8 +9,6 @@
 
 
 
-=======
->>>>>>> 11c6e0e28e0005b30acb787e8127ff286a349875
 DROP TABLE IF EXISTS progress;
 DROP TABLE IF EXISTS enrollment;
 DROP TABLE IF EXISTS lesson;
@@ -38,7 +35,7 @@ CREATE TABLE lesson (
     lesson_id INT AUTO_INCREMENT PRIMARY KEY,
     course_id INT NOT NULL,
     title VARCHAR(150) NOT NULL,
-    seq_no INT NOT NULL,
+    sec_no INT NOT NULL,
     duration_min INT NOT NULL,
     FOREIGN KEY (course_id) REFERENCES course(course_id) ON DELETE CASCADE
 );
@@ -85,7 +82,7 @@ INSERT INTO course (course_id, title, category, price, prerequisite_id) VALUES
 (5, 'Database Systems & SQL Essentials', 'Database', 1500.00, NULL);
 
 
-INSERT INTO lesson (course_id, title, seq_no, duration_min) VALUES
+INSERT INTO lesson (course_id, title, sec_no, duration_min) VALUES
 
 (1, 'Python Setup & Basic Syntax', 1, 25),
 (1, 'Control Structures & Loops', 2, 40),
