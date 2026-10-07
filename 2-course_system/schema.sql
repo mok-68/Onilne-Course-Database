@@ -1,4 +1,4 @@
--- Active: 1791274003397@@127.0.0.1@3306@68011212008
+-- Active: 1789545435044@@127.0.0.1@3306@gym_db
 -- ============================================================
 --  1. CREATE TABLES (โครงสร้างตารางสมบูรณ์)
 -- ============================================================
@@ -65,13 +65,15 @@ CREATE TABLE progress (
     FOREIGN KEY (lesson_id) REFERENCES lesson(lesson_id) ON DELETE CASCADE
 );
 
+
+
 CREATE TABLE certificate (
     cer_id      INT AUTO_INCREMENT PRIMARY KEY,
     ln_name     VARCHAR(100),
     learner_id  INT NOT NULL,
     course_id   INT NOT NULL,
     cou_title   VARCHAR(150),
-    issue_date  DATE NOT NULL DEFAULT CURRENT_DATE,
+    issue_date  DATE NOT NULL DEFAULT (CURRENT_DATE),
     FOREIGN KEY (learner_id)    REFERENCES learner (learner_id) ON DELETE CASCADE,
     FOREIGN KEY (course_id)     REFERENCES course   (course_id) ON DELETE CASCADE
     

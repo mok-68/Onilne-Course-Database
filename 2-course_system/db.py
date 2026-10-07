@@ -241,11 +241,22 @@ def check_can_enroll(learner_id, course_id, enroll_id=None):
        → ผู้เรียนต้องมี enrollment ของวิชานั้นที่ status = 'completed' แล้ว
          (หา prerequisite_id จากตาราง course ก่อน แล้วตรวจด้วย EXISTS หรือ COUNT)
     ตัวอย่าง: raise ValueError("ต้องเรียนวิชาที่ต้องเรียนก่อนให้จบก่อน")"""
-    if not enroll_id:
-        raise ValueError("กรุณาลงทะเบียน")
-    sql =   ("""select * from enrollment
-                where learner_id = %s and course_id = %s and enroll_id <> %s
-            """)
+    # sqlfirst = ("select * from enrollment")
+    # if not enroll_id:
+    #     raise ValueError("กรุณาลงทะเบียน")
+    # count_sub =  run_query( sql =   ("""select * from enrollment
+    #             where learner_id = %s and course_id = %s and enroll_id <> %s
+    #         """))
+    # if count_sub <= 0:
+    #     enroll_id = 0
+
+    # pre_check = ("select * from ")
+    # if 
+    
+
+
+
+
     
     # TODO: เขียนการตรวจ 2 ข้อตามคำใบ้
     _todo("check_can_enroll")
