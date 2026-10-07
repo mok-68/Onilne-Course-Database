@@ -295,7 +295,7 @@ def search_certificate(filters):
                ce.course_id,
                c.category        AS course_title,
                cert.issue_date
-        FROM certificate cert
+        FROM certificate ce
         JOIN learner l ON l.learner_id = ce.learner_id
         JOIN course  c ON c.course_id  = ce.course_id
         WHERE 1 = 1
@@ -306,10 +306,10 @@ def search_certificate(filters):
         params.append(filters["learner_id"])
     if filters.get("name"):
             sql += " AND l.name = %s"
-            params.append(filters["issue_date"])
-    if filters.get("course_id"):
-        sql += " AND cert.course_id = %s"
-        params.append(filters["course_id"])
+            params.append("%"+filters["name"]+"%")
+    if filters.get("category"):
+        sql += " AND c.category = %s"
+        params.append(filters["%"+"category"+"%"])
     
     return run_query(sql, params)
 

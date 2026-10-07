@@ -79,7 +79,8 @@ const ENTITIES = {
       }
     ]
   },
-  "enrollments": {
+  "enrollments": 
+  {
     "label": "การลงทะเบียน",
     "api": "/api/enrollments",
     "idKey": "enroll_id",
@@ -136,7 +137,53 @@ const ENTITIES = {
         ]
       }
     ]
+  },
+// Certificate 
+  "certificate" : {
+    "label": "ใบรับรอง",
+    "api": "/api/certificate",
+    "idKey": "cer_id",
+    "search": [
+      {
+        "key": "learner_id",
+        "label": "รหัสผู้เรียน",
+        "type": "number"
+      },
+      {
+        "key"   : "name",
+        "label" : "ชื่อผู้เรียน",
+        "type"  : "text"
+      },
+      {
+        "key"   : "category",
+        "label" : "ประเภทคอร์ส",
+        "type"  : "text"
+      }
+    ],
+    "form": [
+      {
+        "key": "learner_id",
+        "label": "รหัสผู้เรียน",
+        "type": "number"
+      },
+      {
+        "key"   : "name",
+        "label" : "ชื่อผู้เรียน",
+        "type"  : "text"
+      },
+      {
+        "key"   : "category",
+        "label" : "ประเภทคอร์ส",
+        "type"  : "text"
+      }
+    ]
+
   }
+
+
+
+
+  
 
 
 
