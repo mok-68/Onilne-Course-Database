@@ -56,10 +56,10 @@ const ENTITIES = {
         "key": "category",
         "label": "หมวดหมู่",
         "type": "select",
-        "placeholder": "-- กรุณาเลือกหมวดหมู่ --",
+        "allowEmpty": true,
         "optionsFrom": {
           "api": "/api/courses",
-          "value": "course_id",
+          "value": "category",
           "label": "category"
         }
       }
@@ -74,10 +74,10 @@ const ENTITIES = {
         "key": "category",
         "label": "หมวดหมู่",
         "type": "select",
-        "placeholder": "-- กรุณาเลือกหมวดหมู่ --",
+        "allowEmpty": true,
         "optionsFrom": {
           "api": "/api/courses",
-          "value": "course_id",
+          "value": "category",
           "label": "category"
         }
       },

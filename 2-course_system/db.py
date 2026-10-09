@@ -149,6 +149,7 @@ def get_course(course_id):
     # TODO: SELECT * FROM course WHERE course_id = %s แล้วคืนแถวเดียว
     sql =("select * from course where course_id =%s")
     params = (course_id,)
+    
     rows = run_query(sql, params)
     return rows[0] if rows else None
 
@@ -164,7 +165,8 @@ def create_course(data):
               data.get("category"),
               data.get("price"),
               blank_to_none(data.get("prerequisite_id"))
-              )
+    )
+    return run_command(sql , params)
     
 
 
