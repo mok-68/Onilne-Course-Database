@@ -156,13 +156,16 @@ def get_course(course_id):
 def create_course(data):
     """เพิ่ม คอร์ส ใหม่ — data มีคีย์: title, category, price, prerequisite_id"""
     # TODO: INSERT INTO course (...) VALUES (%s, ...)
+    if float(data.get("price", 0)) < 0:
+        raise ValueError("ราคาไม่สามารถติดลบได้")
+
     sql = ("INSERT INTO course (title, category, price, prerequisite_id) VALUES (%s, %s, %s, %s)")
     params = (data.get("title"),
               data.get("category"),
               data.get("price"),
               blank_to_none(data.get("prerequisite_id"))
               )
-    return run_command(sql, params)
+    
 
 
 def update_course(course_id, data):
@@ -274,7 +277,6 @@ def check_course_complete(learner_id, course_id):
     # 3) เทียบกัน: ดูจบ < จำนวนบททั้งหมด → ยังไม่ครบ
     if not done or not total or done[0]["n"] < total[0]["n"]:
         raise ValueError("ยังดูบทเรียนไม่ครบ จึงยังไม่สามารถเรียนจบคอร์สนี้ได้")
-
 
 def create_enrollment(data):
     """เพิ่ม การลงทะเบียน ใหม่ — data มีคีย์: learner_id, course_id, enroll_date, status

@@ -6,6 +6,7 @@
 //   แสดง title แต่ส่งค่าเป็น course_id (อ่านรายการจาก /api/courses)
 //   ช่อง FK อื่น ๆ ทำแบบเดียวกันได้ — เปลี่ยน "type": "number" เป็น select + optionsFrom
 const ENTITIES = {
+
   "learners": {
     "label": "ผู้เรียน",
     "api": "/api/learners",
@@ -40,6 +41,7 @@ const ENTITIES = {
       }
     ]
   },
+
   "courses": {
     "label": "คอร์ส",
     "api": "/api/courses",
@@ -53,7 +55,13 @@ const ENTITIES = {
       {
         "key": "category",
         "label": "หมวดหมู่",
-        "type": "text"
+        "type": "select",
+        "placeholder": "-- กรุณาเลือกหมวดหมู่ --",
+        "optionsFrom": {
+          "api": "/api/courses",
+          "value": "course_id",
+          "label": "category"
+        }
       }
     ],
     "form": [
@@ -65,7 +73,13 @@ const ENTITIES = {
       {
         "key": "category",
         "label": "หมวดหมู่",
-        "type": "text"
+        "type": "select",
+        "placeholder": "-- กรุณาเลือกหมวดหมู่ --",
+        "optionsFrom": {
+          "api": "/api/courses",
+          "value": "course_id",
+          "label": "category"
+        }
       },
       {
         "key": "price",
@@ -76,6 +90,7 @@ const ENTITIES = {
         "key": "prerequisite_id",
         "label": "วิชาที่ต้องเรียนก่อน",
         "type": "select",
+        "placeholder": "ไม่มี",
         "allowEmpty": true,
         "optionsFrom": {
           "api": "/api/courses",
@@ -85,6 +100,7 @@ const ENTITIES = {
       }
     ]
   },
+  
   "enrollments": 
   {
     "label": "การลงทะเบียน",
