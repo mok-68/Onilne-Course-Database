@@ -356,6 +356,7 @@ def delete_certificate(cer_id):
     sql = "DELETE FROM certificate WHERE cer_id = %s"
     return run_command(sql, (cer_id,))
 
+
 # ============================================================
 #  REPORT (รายงาน — ใช้ JOIN + GROUP BY + subquery)
 #  ★ ชื่อคอลัมน์ใน SELECT จะกลายเป็นหัวตารางบนเว็บ — ใช้ AS 'ชื่อภาษาไทย' ได้
