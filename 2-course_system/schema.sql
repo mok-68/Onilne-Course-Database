@@ -49,7 +49,8 @@ CREATE TABLE enrollment (
     learner_id      INT NOT NULL,
     course_id       INT NOT NULL,
     enroll_date     DATE NOT NULL,
-    status ENUM('studying', 'completed') NOT NULL DEFAULT 'studying',
+    status ENUM('studying', 'completed', 'cancelled') NOT NULL DEFAULT 'studying',
+    completed_date  DATE NULL,
     FOREIGN KEY (learner_id) REFERENCES learner(learner_id) ON DELETE CASCADE,
     FOREIGN KEY (course_id) REFERENCES course(course_id) ON DELETE CASCADE,
     UNIQUE (learner_id, course_id) 
@@ -115,15 +116,16 @@ INSERT INTO lesson (course_id, title, sec_no, duration_min) VALUES
 (5, 'SQL Queries & Joins', 2, 55);
 
 
-INSERT INTO enrollment (learner_id, course_id, enroll_date, status) VALUES
-(1, 1, '2026-01-06', 'completed'), 
-(1, 2, '2026-01-20', 'studying'),  
-(2, 4, '2026-01-11', 'studying'),  
-(3, 1, '2026-01-15', 'completed'), 
-(3, 2, '2026-01-28', 'completed'), 
-(3, 3, '2026-02-02', 'studying'),
-(4, 5, '2026-02-03', 'completed'),
-(5, 1, '2026-01-18', 'completed');
+INSERT INTO enrollment (learner_id, course_id, enroll_date, status, completed_date) VALUES
+(1, 1, '2026-01-06', 'completed', '2026-01-15'), 
+(1, 2, '2026-01-20', 'studying',  NULL),  
+(2, 4, '2026-01-11', 'studying',  NULL),  
+(3, 1, '2026-01-15', 'completed', '2026-01-27'), 
+(3, 2, '2026-01-28', 'completed', '2026-02-01'), 
+(3, 3, '2026-02-02', 'studying',  NULL),
+(4, 5, '2026-02-03', 'completed', '2026-02-10'),
+(5, 1, '2026-01-18', 'completed', '2026-01-25'),
+(6, 5, '2026-02-08', 'cancelled', NULL);
 
 INSERT INTO progress (learner_id, lesson_id, watched, completed_date) VALUES
 (1, 1, TRUE, '2026-01-10 14:00:00'),

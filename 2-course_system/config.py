@@ -14,5 +14,5 @@ DB_PORT = 3306
 DB_HOST = "localhost"
 DB_USER = "root"
 DB_PASSWORD = ""
-DB_NAME = "68011212008"
+DB_NAME = "onile_course"
 

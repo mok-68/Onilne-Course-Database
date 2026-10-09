@@ -74,8 +74,14 @@ const ENTITIES = {
       },
       {
         "key": "prerequisite_id",
-        "label": "รหัสวิชาที่ต้องเรียนก่อน",
-        "type": "number"
+        "label": "วิชาที่ต้องเรียนก่อน",
+        "type": "select",
+        "allowEmpty": true,
+        "optionsFrom": {
+          "api": "/api/courses",
+          "value": "course_id",
+          "label": "title"
+        }
       }
     ]
   },
@@ -87,8 +93,13 @@ const ENTITIES = {
     "search": [
       {
         "key": "learner_id",
-        "label": "รหัสผู้เรียน",
-        "type": "number"
+        "label": "ชื่อผู้เรียน",
+        "type": "select",
+        "optionsFrom": {
+          "api": "/api/learners",
+          "value" : "learner_id",
+          "label" : "name"
+        }
       },
       {
         "key": "course_id",
@@ -102,15 +113,21 @@ const ENTITIES = {
         "options": [
           "",
           "studying",
-          "completed"
+          "completed",
+          "cancelled"
         ]
       }
     ],
     "form": [
       {
         "key": "learner_id",
-        "label": "รหัสผู้เรียน",
-        "type": "number"
+        "label": "ชื่อผู้เรียน",
+        "type": "select" ,
+        "optionsFrom": {
+          "api": "/api/learners",
+          "value" : "learner_id",
+          "label" : "name"
+        }
       },
       {
         "key": "course_id",
@@ -133,7 +150,8 @@ const ENTITIES = {
         "type": "select",
         "options": [
           "studying",
-          "completed"
+          "completed",
+          "cancelled"
         ]
       }
     ]
@@ -146,8 +164,13 @@ const ENTITIES = {
     "search": [
       {
         "key": "learner_id",
-        "label": "รหัสผู้เรียน",
-        "type": "number"
+        "label": "ผู้เรียน",
+        "type": "select",
+        "optionsFrom": {
+          "api": "/api/learners",
+          "value": "learner_id",
+          "label": "name"
+        }
       },
       {
         "key"   : "name",
@@ -163,18 +186,28 @@ const ENTITIES = {
     "form": [
       {
         "key": "learner_id",
-        "label": "รหัสผู้เรียน",
-        "type": "number"
+        "label": "ผู้เรียน",
+        "type": "select",
+        "optionsFrom": {
+          "api": "/api/learners",
+          "value": "learner_id",
+          "label": "name"
+        }
       },
       {
-        "key"   : "name",
-        "label" : "ชื่อผู้เรียน",
-        "type"  : "text"
+        "key": "course_id",
+        "label": "คอร์ส",
+        "type": "select",
+        "optionsFrom": {
+          "api": "/api/courses",
+          "value": "course_id",
+          "label": "title"
+        }
       },
       {
-        "key"   : "category",
-        "label" : "ประเภทคอร์ส",
-        "type"  : "text"
+        "key": "issue_date",
+        "label": "วันที่ออกใบรับรอง",
+        "type": "date"
       }
     ]
 
@@ -217,6 +250,7 @@ async function loadOptions(fields, forSearch) {
     f.options = r.ok ? (r.data || []).map(row => ({ value: row[src.value], label: row[src.label] }))
                      : [{ value: "", label: (r.todo ? "🚧 " : "⚠️ ") + r.error }];
     if (forSearch && r.ok) f.options.unshift({ value: "", label: "ทั้งหมด" });
+    else if (f.allowEmpty && r.ok) f.options.unshift({ value: "", label: "ไม่มี" });
   }
 }
 // ช่องในฟอร์มที่ใช้อยู่ตอนนี้ (ช่อง editOnly แสดงเฉพาะตอนแก้ไข)

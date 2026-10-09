@@ -116,7 +116,7 @@ def enrollment_delete(_id):
 @app.route("/api/certificate", methods=["GET"])
 def certificates_list():
     filters = {k: v for k, v in request.args.items() if v}
-    return safe(db.search_certificates, filters)
+    return safe(db.search_certificate, filters)
 
 @app.route("/api/certificate/<int:_id>", methods=["GET"])
 def certificate_get(_id):
