@@ -73,13 +73,7 @@ const ENTITIES = {
       {
         "key": "category",
         "label": "หมวดหมู่",
-        "type": "select",
-        "allowEmpty": true,
-        "optionsFrom": {
-          "api": "/api/courses",
-          "value": "category",
-          "label": "category"
-        }
+        "type": "text"
       },
       {
         "key": "price",
