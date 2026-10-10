@@ -13,6 +13,6 @@ DB_PORT = 3306
 # ★ ถ้าใช้ MySQL ในเครื่องตัวเอง (ดูคู่มือหน้า 12) ให้ใช้ค่านี้แทน 4 บรรทัดบน
 DB_HOST = "localhost"
 DB_USER = "root"
-DB_PASSWORD = ""
-DB_NAME = "onile_course"
+DB_PASSWORD = "122549"
+DB_NAME = "mysql"
 
