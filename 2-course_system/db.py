@@ -238,7 +238,6 @@ def get_enrollment(enroll_id):
     rows = run_query(sql, params)
     return rows[0] if rows else None
 
-
 def check_can_enroll(learner_id, course_id, enroll_id=None):
     """ตรวจก่อนบันทึกการลงทะเบียน — ถ้าไม่ผ่านให้ raise ValueError("ข้อความ")
     (หน้าเว็บจะแสดงข้อความนั้นเป็น alert ให้ผู้ใช้เห็น และไม่บันทึกข้อมูล)
@@ -339,11 +338,17 @@ def update_enrollment(enroll_id, data):
 
 
 def delete_enrollment(enroll_id):
-    """ลบ การลงทะเบียน ตาม enroll_id"""
+    """ลบ การลงทะเบียน ตาม enroll_id — ลบได้เฉพาะสถานะ 'cancelled'
+    ถ้ายัง 'studying' หรือ 'completed' อยู่ จะ raise ValueError ให้หน้าเว็บเตือน
+    (หน้าเว็บแสดงข้อความนี้เป็น alert และไม่ลบข้อมูล)"""
+    row = get_enrollment(enroll_id)
+    if not row:
+        raise ValueError("ไม่พบข้อมูลการลงทะเบียน")
+    if row["status"] != "cancelled":
+        raise ValueError("ลบไม่ได้: การลงทะเบียนที่กำลังเรียนอยู่หรือเรียนจบแล้วต้องยกเลิก (cancelled) ก่อน")
+
     sql = "DELETE FROM enrollment WHERE enroll_id = %s"
     return run_command(sql, (enroll_id,))
-
-
 
 # ---------- certificate ----------
 def search_certificate(filters):
