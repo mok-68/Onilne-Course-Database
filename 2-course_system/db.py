@@ -99,12 +99,10 @@ def update_learner(learner_id, data):
 
 
 def delete_learner(learner_id):
-    """ลบ ผู้เรียน ตาม learner_id"""
-    sql = ("DELETE FROM learner WHERE learner_id=%s")
-    params = (learner_id,)
-    return run_command(sql,params)
-    # TODO: DELETE FROM learner WHERE learner_id=%s
-    _todo("delete_learner")
+    """ลบ ผู้เรียน — ลบไม่ได้ถ้ามีการลงทะเบียนที่กำลังเรียน/เรียนจบแล้ว"""
+    if has_blocking_enrollment("learner_id", learner_id):
+        raise ValueError("ลบไม่ได้: ผู้เรียนคนนี้มีการลงทะเบียนที่กำลังเรียนหรือเรียนจบแล้ว")
+    return run_command("DELETE FROM learner WHERE learner_id=%s", (learner_id,))
 
 # ---------- คอร์ส (course) ----------
 def search_courses(filters):
@@ -185,12 +183,10 @@ def update_course(course_id, data):
 
 
 def delete_course(course_id):
-    """ลบ คอร์ส ตาม course_id"""
-    sql = ("DELETE FROM course WHERE course_id=%s")
-    params = (course_id,)
-    return run_command(sql,params)
-    # TODO: DELETE FROM course WHERE course_id=%s
-    _todo("delete_course")
+    """ลบ คอร์ส — ลบไม่ได้ถ้ามีการลงทะเบียนที่กำลังเรียน/เรียนจบแล้ว"""
+    if has_blocking_enrollment("course_id", course_id):
+        raise ValueError("ลบไม่ได้: คอร์สนี้มีการลงทะเบียนที่กำลังเรียนหรือเรียนจบแล้ว")
+    return run_command("DELETE FROM course WHERE course_id=%s", (course_id,))
 
 # ---------- การลงทะเบียน (enrollment) ----------
 def search_enrollments(filters):
@@ -277,29 +273,33 @@ def check_course_complete(learner_id, course_id):
         (learner_id, course_id))
     # 3) เทียบกัน: ดูจบ < จำนวนบททั้งหมด → ยังไม่ครบ
     if not done or not total or done[0]["n"] < total[0]["n"]:
-        raise ValueError("ยังดูบทเรียนไม่ครบ จึงยังไม่สามารถเรียนจบคอร์สนี้ได้")
-
+        n_done = done[0]["n"] if done else 0
+        n_total = total[0]["n"] if total else 0
+        raise ValueError(f"ยังดูบทเรียนไม่ครบ (ดูแล้ว {n_done}/{n_total} บท) จึงยังไม่สามารถเรียนจบคอร์สนี้ได้")
+    
+def validate_enrollment_input(enroll_date, status, completed_date):
+    if blank_to_none(enroll_date) is None:
+        raise ValueError("กรุณากรอกวันที่ลงทะเบียน")
+    if status == "completed" and completed_date and str(enroll_date) > str(completed_date):
+        raise ValueError("วันที่ลงทะเบียนต้องไม่หลังวันที่เรียนจบ")
+    
 def create_enrollment(data):
-    """เพิ่ม การลงทะเบียน ใหม่ — data มีคีย์: learner_id, course_id, enroll_date, status
-    คำใบ้:
-      1) เรียก check_can_enroll(data["learner_id"], data["course_id"]) ก่อน
-      2) INSERT INTO enrollment (...) VALUES (%s, ...)"""
+    """เพิ่ม การลงทะเบียน ใหม่ — data มีคีย์: learner_id, course_id, enroll_date, status"""
     check_can_enroll(data["learner_id"], data["course_id"])
     # คำนวณ status + completed_date (เฉพาะตอนจบแล้วถึงมีวันเรียนจบ)
+    
     status = data.get("status") or "studying"
     completed_date = date.today().isoformat() if status == "completed" else None
+    if status == "completed":
+        check_course_complete(data["learner_id"], data["course_id"])
+    validate_enrollment_input(data["enroll_date"], status, completed_date)
     sql = "INSERT INTO enrollment (learner_id, course_id, enroll_date, status, completed_date) VALUES (%s, %s, %s, %s, %s)"
     params = (data["learner_id"], data["course_id"], data["enroll_date"], status, completed_date)
     return run_command(sql, params)
 
 
 def update_enrollment(enroll_id, data):
-    """แก้ไข การลงทะเบียน ตาม enroll_id
-    คำใบ้:
-      1) ถ้าเปลี่ยนผู้เรียนหรือคอร์ส (เทียบกับค่าเดิมจาก get_enrollment) →
-         check_can_enroll(data["learner_id"], data["course_id"], enroll_id)
-         (แก้แค่สถานะ เช่น studying → completed ไม่ต้องตรวจ)
-      2) UPDATE enrollment SET ... WHERE enroll_id=%s"""
+    """แก้ไข การลงทะเบียน ตาม enroll_id — การลงทะเบียนที่เรียนจบแล้วเปลี่ยนสถานะกลับไม่ได้"""
     # ดึงค่าเดิม เช็คว่ามี enrollment นี้จริงไหม
     old = get_enrollment(enroll_id)
     if not old:
@@ -309,17 +309,20 @@ def update_enrollment(enroll_id, data):
     if str(data.get("learner_id")) != str(old["learner_id"]) or str(data.get("course_id")) != str(old["course_id"]):
         check_can_enroll(data["learner_id"], data["course_id"], enroll_id)
 
-    
     new_status = data.get("status") or "studying"
+    if old["status"] == "completed" and new_status != "completed":
+        raise ValueError("แก้ไม่ได้: การลงทะเบียนที่เรียนจบแล้วเปลี่ยนสถานะกลับไม่ได้")
+
     if new_status == "completed":
         if old["status"] == "completed":
-            completed_date = old.get("completed_date")  
+            completed_date = old.get("completed_date")
         else:
-            completed_date = date.today().isoformat()    
+            completed_date = date.today().isoformat()
     else:
-        completed_date = None                            
+        completed_date = None
 
-    
+    validate_enrollment_input(data["enroll_date"], new_status, completed_date)
+
     if new_status == "completed" and old["status"] != "completed":
         check_course_complete(data["learner_id"], data["course_id"])
         exist = run_query(
@@ -331,11 +334,19 @@ def update_enrollment(enroll_id, data):
             "INSERT INTO certificate (learner_id, course_id) VALUES (%s, %s)",
             (data["learner_id"], data["course_id"]))
 
-    
     sql = "UPDATE enrollment SET learner_id = %s, course_id = %s, enroll_date = %s, status = %s, completed_date = %s WHERE enroll_id = %s"
     params = (data["learner_id"], data["course_id"], data["enroll_date"], new_status, completed_date, enroll_id)
     return run_command(sql, params)
 
+def has_blocking_enrollment(column, _id):
+    """คอลัมน์ที่อนุญาตมีแค่ learner_id / course_id (เป็นค่าคงที่ในโค้ด ไม่ใช่ input)"""
+    if column not in ("learner_id", "course_id"):
+        raise ValueError("คอลัมน์ไม่ถูกต้อง")
+    rows = run_query(
+        "SELECT COUNT(*) AS n FROM enrollment "
+        f"WHERE {column} = %s AND status IN ('studying', 'completed')",
+        (_id,))
+    return bool(rows and rows[0]["n"])
 
 def delete_enrollment(enroll_id):
     """ลบ การลงทะเบียน ตาม enroll_id — ลบได้เฉพาะสถานะ 'cancelled'

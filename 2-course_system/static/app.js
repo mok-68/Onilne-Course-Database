@@ -257,8 +257,16 @@ function fieldHtml(f, prefix, value = "") {
 async function loadOptions(fields, forSearch) {
   for (const f of fields.filter(f => f.optionsFrom)) {
     const src = f.optionsFrom, r = await api(src.api);
-    f.options = r.ok ? (r.data || []).map(row => ({ value: row[src.value], label: row[src.label] }))
-                     : [{ value: "", label: (r.todo ? "🚧 " : "⚠️ ") + r.error }];
+    if (r.ok) {
+      const seen = new Map();
+      (r.data || []).forEach(row => {
+        const v = row[src.value];
+        if (!seen.has(v)) seen.set(v, { value: v, label: row[src.label] });
+      });
+      f.options = [...seen.values()];
+    } else {
+      f.options = [{ value: "", label: (r.todo ? "🚧 " : "⚠️ ") + r.error }];
+    }
     if (forSearch && r.ok) f.options.unshift({ value: "", label: "ทั้งหมด" });
     else if (f.allowEmpty && r.ok) f.options.unshift({ value: "", label: "ไม่มี" });
   }
