@@ -11,6 +11,15 @@ const ENTITIES = {
     "label": "ผู้เรียน",
     "api": "/api/learners",
     "idKey": "learner_id",
+    "detail": {
+      "api": "/api/enrollments",
+      "param": "learner_id",
+      "nameApi": "/api/learners",
+      "titleCol": "name",
+      "title": "การสมัครของ",
+      "btnLabel": "ดูการสมัคร",
+      "cols": ["enroll_id", "course_title", "enroll_date", "status", "completed_date", "want_cert", "has_cert"]
+    },
     "search": [
       {
         "key": "name",
@@ -46,6 +55,15 @@ const ENTITIES = {
     "label": "คอร์ส",
     "api": "/api/courses",
     "idKey": "course_id",
+    "detail": {
+      "api": "/api/enrollments",
+      "param": "course_id",
+      "nameApi": "/api/courses",
+      "titleCol": "title",
+      "title": "ผู้สมัครในคอร์ส",
+      "btnLabel": "ดูผู้สมัคร",
+      "cols": ["enroll_id", "learner_name", "enroll_date", "status", "completed_date", "has_cert"]
+    },
     "search": [
       {
         "key": "title",
@@ -163,6 +181,15 @@ const ENTITIES = {
           "completed",
           "cancelled"
         ]
+      },
+      {
+        "key": "want_cert",
+        "label": "ต้องการรับใบ Cer?",
+        "type": "select",
+        "options": [
+          { "value": "yes", "label": "ต้องการใบรับรอง" },
+          { "value": "no", "label": "ไม่ต้องการใบรับรอง" }
+        ]
       }
     ]
   },
@@ -257,8 +284,16 @@ function fieldHtml(f, prefix, value = "") {
 async function loadOptions(fields, forSearch) {
   for (const f of fields.filter(f => f.optionsFrom)) {
     const src = f.optionsFrom, r = await api(src.api);
-    f.options = r.ok ? (r.data || []).map(row => ({ value: row[src.value], label: row[src.label] }))
-                     : [{ value: "", label: (r.todo ? "🚧 " : "⚠️ ") + r.error }];
+    if (r.ok) {
+      const seen = new Map();
+      (r.data || []).forEach(row => {
+        const v = row[src.value];
+        if (!seen.has(v)) seen.set(v, { value: v, label: row[src.label] });
+      });
+      f.options = [...seen.values()];
+    } else {
+      f.options = [{ value: "", label: r.error }];
+    }
     if (forSearch && r.ok) f.options.unshift({ value: "", label: "ทั้งหมด" });
     else if (f.allowEmpty && r.ok) f.options.unshift({ value: "", label: "ไม่มี" });
   }
@@ -282,18 +317,54 @@ async function doSearch() {
 function renderTable(r) {
   const head = $("#tableHead"), body = $("#tableBody"), st = $("#status");
   head.innerHTML = ""; body.innerHTML = "";
-  if (!r.ok) { setStatus(st, (r.todo ? "🚧 " : "⚠️ ") + r.error, r.todo ? "todo" : "err"); return; }
+  if (!r.ok) { setStatus(st, r.error, r.todo ? "todo" : "err"); return; }
   const rows = r.data || [];
   if (rows.length === 0) { setStatus(st, "ไม่พบข้อมูล"); return; }
   setStatus(st, "พบ " + rows.length + " รายการ");
   const cols = Object.keys(rows[0]);
   head.innerHTML = cols.map(c => "<th>" + c + "</th>").join("") + "<th>จัดการ</th>";
   body.innerHTML = rows.map(row => {
-    const id = row[ENTITIES[current].idKey];
+    const cfg = ENTITIES[current];
+    const id = row[cfg.idKey];
+    let extra = "";
+    if (cfg.detail) {
+      extra += ' <button class="btn sm" onclick="showDetail(' + id + ')">' + cfg.detail.btnLabel + '</button>';
+    }
+    if (cfg.idKey === "enroll_id" && row.status === "completed" && row.has_cert === "ยังไม่มี") {
+      extra += ' <button class="btn sm" onclick="requestCert(' + id + ')">ขอใบรับรอง</button>';
+    }
     return "<tr>" + cols.map(c => "<td>" + (row[c] ?? "—") + "</td>").join("") +
       '<td><button class="btn sm" onclick="editRow(' + id + ')">แก้ไข</button> ' +
-      '<button class="btn sm del" onclick="deleteRow(' + id + ')">ลบ</button></td></tr>';
+      '<button class="btn sm del" onclick="deleteRow(' + id + ')">ลบ</button>' + extra + '</td></tr>';
   }).join("");
+}
+async function showDetail(id) {
+  const cfg = ENTITIES[current], d = cfg.detail;
+  const [listR, nameR] = await Promise.all([
+    api(d.api + "?" + d.param + "=" + id),
+    api(d.nameApi + "/" + id)
+  ]);
+  if (!listR.ok) { alert(listR.error); return; }
+  const name = nameR.ok && nameR.data ? nameR.data[d.titleCol] : "#" + id;
+  $("#detailTitle").textContent = d.title + " " + name;
+  const rows = listR.data || [];
+  if (rows.length === 0) {
+    $("#detailBody").innerHTML = "<p>ยังไม่มีข้อมูลการลงทะเบียน</p>";
+  } else {
+    $("#detailBody").innerHTML = '<div class="table-wrap"><table><thead><tr>' +
+      d.cols.map(c => "<th>" + c + "</th>").join("") +
+      "</tr></thead><tbody>" +
+      rows.map(row => "<tr>" + d.cols.map(c => "<td>" + (row[c] ?? "—") + "</td>").join("") + "</tr>").join("") +
+      "</tbody></table></div>";
+  }
+  $("#detailModal").classList.remove("hidden");
+}
+async function requestCert(id) {
+  if (!confirm("ขอออกใบรับรองสำหรับการลงทะเบียนนี้?")) return;
+  const r = await api("/api/enrollments/" + id + "/request-cert", { method: "POST" });
+  if (!r.ok) { alert(r.error); return; }
+  setStatus($("#status"), "ออกใบรับรองเรียบร้อย");
+  doSearch();
 }
 async function openForm(title, data = {}) {
   await loadOptions(formFields(), false);
@@ -305,20 +376,20 @@ function collectForm() { const d = {}; formFields().filter(f => f.key).forEach(f
 async function editRow(id) {
   const cfg = ENTITIES[current];
   const r = await api(cfg.api + "/" + id);
-  if (!r.ok) { alert((r.todo ? "🚧 " : "⚠️ ") + r.error); return; }
+  if (!r.ok) { alert(r.error); return; }
   editingId = id; openForm("แก้ไขข้อมูล", r.data);
 }
 async function deleteRow(id) {
   if (!confirm("ยืนยันการลบ?")) return;
   const r = await api(ENTITIES[current].api + "/" + id, { method: "DELETE" });
-  if (!r.ok) { alert((r.todo ? "🚧 " : "⚠️ ") + r.error); return; }
+  if (!r.ok) { alert(r.error); return; }
   doSearch();
 }
 async function save() {
   const cfg = ENTITIES[current], data = collectForm();
   const opts = { method: editingId ? "PUT" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) };
   const r = await api(editingId ? cfg.api + "/" + editingId : cfg.api, opts);
-  if (!r.ok) { alert((r.todo ? "🚧 " : "⚠️ ") + r.error); return; }
+  if (!r.ok) { alert(r.error); return; }
   $("#modal").classList.add("hidden"); doSearch();
 }
 document.querySelectorAll(".tab").forEach(t => t.addEventListener("click", () => {
@@ -332,5 +403,6 @@ $("#btnClear").onclick = () => buildSearch();
 $("#btnAdd").onclick = () => { editingId = null; openForm("เพิ่มข้อมูลใหม่"); };
 $("#btnSave").onclick = save;
 $("#btnCancel").onclick = () => $("#modal").classList.add("hidden");
+$("#btnDetailClose").onclick = () => $("#detailModal").classList.add("hidden");
 buildSearch();
 setStatus($("#status"), 'กด "ค้นหา" เพื่อแสดงข้อมูล');

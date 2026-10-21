@@ -16,22 +16,86 @@ def get_connection():
 def run_query(sql, params=None):
     """รัน SELECT คืนผลเป็น list ของ dict"""
     conn = get_connection(); cur = conn.cursor(dictionary=True)
-    cur.execute(sql, params or ()); rows = cur.fetchall()
-    cur.close(); conn.close(); return rows
+    try:
+        cur.execute(sql, params or ()); return cur.fetchall()
+    finally:
+        cur.close(); conn.close()
 
 
 def run_command(sql, params=None):
-    """รัน INSERT / UPDATE / DELETE แล้ว commit"""
+    """รัน INSERT / UPDATE / DELETE แล้ว commit
+    ถ้า MySQL โยน error ที่ผู้ใช้ทำได้ (ข้อมูลซ้ำ / FK ไม่มีจริง / ค่าว่าง)
+    จะแปลงเป็น ValueError ข้อความไทย → หน้าเว็บแสดงเป็น alert (HTTP 400)"""
     conn = get_connection(); cur = conn.cursor()
-    cur.execute(sql, params or ()); conn.commit()
-    out = {"new_id": cur.lastrowid, "affected": cur.rowcount}
-    cur.close(); conn.close(); return out
+    try:
+        cur.execute(sql, params or ()); conn.commit()
+        return {"new_id": cur.lastrowid, "affected": cur.rowcount}
+    except mysql.connector.Error as e:
+        conn.rollback()
+        friendly = {
+            1062: "ข้อมูลซ้ำ: ข้อมูลชุดนี้มีอยู่ในระบบแล้ว",
+            1452: "บันทึกไม่ได้: รหัสที่อ้างอิงไม่มีอยู่ในระบบ",
+            1048: "บันทึกไม่ได้: ข้อมูลบางช่องต้องไม่ว่าง (NOT NULL)",
+            1364: "บันทึกไม่ได้: ข้อมูลบางช่องต้องไม่ว่าง",
+            1265: "ค่าสถานะไม่ถูกต้อง",
+            1292: "รูปแบบวันที่ไม่ถูกต้อง",
+            1366: "ค่าตัวเลขไม่ถูกต้อง",
+        }
+        if e.errno in friendly:
+            raise ValueError(friendly[e.errno])
+        raise
+    finally:
+        cur.close(); conn.close()
 
 
 def blank_to_none(value):
     """ช่องที่ไม่ได้กรอกในฟอร์มจะส่งมาเป็น "" — แปลงเป็น None (= NULL ใน SQL)
     ใช้กับคอลัมน์ที่ว่างได้ เช่น return_date, paid_date  เพราะ MySQL ไม่รับ '' เป็น DATE"""
     return None if value in ("", None) else value
+
+
+def _require(data, fields):
+    """เช็คว่าฟอร์มกรอกครบทุกช่องที่กำหนด — เว้นว่าง ("", None, whitespace) ให้ raise ValueError
+    fields = {"key": "ชื่อช่องภาษาไทย"} → ข้อความขึ้นเป็น alert บนหน้าเว็บ"""
+    for key, label in fields.items():
+        value = data.get(key)
+        if value is None or str(value).strip() == "":
+            raise ValueError(f"กรุณากรอก {label}")
+
+
+def _parse_price(value):
+    """แปลงราคาจากฟอร์มเป็น float พร้อมตรวจข้อผิดพลาด: ว่าง / ไม่ใช่ตัวเลข / ติดลบ"""
+    if value is None or str(value).strip() == "":
+        raise ValueError("กรุณากรอกราคา")
+    try:
+        price = float(value)
+    except (TypeError, ValueError):
+        raise ValueError("ราคาต้องเป็นตัวเลขเท่านั้น")
+    if price < 0:
+        raise ValueError("ราคาไม่สามารถติดลบได้")
+    return price
+
+
+def _parse_want_cert(value):
+    v = (value or "yes") if value is not None else "yes"
+    v = str(v).strip().lower()
+    if v == "":
+        v = "yes"
+    if v not in ("yes", "no"):
+        raise ValueError("ค่า \"ต้องการใบรับรอง\" ต้องเป็น yes หรือ no เท่านั้น")
+    return v
+
+
+def _check_email_unique(email, learner_id=None):
+    """เช็ค email ซ้ำก่อน INSERT/UPDATE (learner_id ใช้ตอนแก้ไข เพื่อไม่ให้ชนตัวเอง)"""
+    sql = "SELECT COUNT(*) AS n FROM learner WHERE email = %s"
+    params = [email]
+    if learner_id is not None:
+        sql += " AND learner_id <> %s"
+        params.append(learner_id)
+    rows = run_query(sql, tuple(params))
+    if rows and rows[0]["n"] > 0:
+        raise ValueError("อีเมลนี้ถูกใช้ไปแล้ว กรุณาใช้อีเมลอื่น")
 
 
 def _todo(name):
@@ -77,6 +141,10 @@ def get_learner(learner_id):
 
 def create_learner(data):
     """เพิ่ม ผู้เรียน ใหม่ — data มีคีย์: name, email, join_date"""
+    _require(data, {"name": "ชื่อผู้เรียน", "email": "อีเมล", "join_date": "วันที่สมัคร"})
+    if "@" not in data["email"]:
+        raise ValueError("รูปแบบอีเมลไม่ถูกต้อง (ต้องมี @)")
+    _check_email_unique(data["email"])
     sql = ("INSERT INTO learner (name, email, join_date) VALUES (%s,%s,%s)")
     params = (  data["name"],
                 data["email"],
@@ -86,6 +154,10 @@ def create_learner(data):
     
 def update_learner(learner_id, data):
     """แก้ไข ผู้เรียน ตาม learner_id"""
+    _require(data, {"name": "ชื่อผู้เรียน", "email": "อีเมล", "join_date": "วันที่สมัคร"})
+    if "@" not in data["email"]:
+        raise ValueError("รูปแบบอีเมลไม่ถูกต้อง (ต้องมี @)")
+    _check_email_unique(data["email"], learner_id)
     sql = ("UPDATE learner SET name = %s, email = %s, join_date = %s WHERE learner_id=%s")
     params = (
         data["name"],
@@ -99,12 +171,10 @@ def update_learner(learner_id, data):
 
 
 def delete_learner(learner_id):
-    """ลบ ผู้เรียน ตาม learner_id"""
-    sql = ("DELETE FROM learner WHERE learner_id=%s")
-    params = (learner_id,)
-    return run_command(sql,params)
-    # TODO: DELETE FROM learner WHERE learner_id=%s
-    _todo("delete_learner")
+    """ลบ ผู้เรียน — ลบไม่ได้ถ้ามีการลงทะเบียนที่กำลังเรียน/เรียนจบแล้ว"""
+    if has_blocking_enrollment("learner_id", learner_id):
+        raise ValueError("ลบไม่ได้: ผู้เรียนคนนี้มีการลงทะเบียนที่กำลังเรียนหรือเรียนจบแล้ว")
+    return run_command("DELETE FROM learner WHERE learner_id=%s", (learner_id,))
 
 # ---------- คอร์ส (course) ----------
 def search_courses(filters):
@@ -123,7 +193,8 @@ def search_courses(filters):
                 c.category, 
                 c.price, 
                 c.prerequisite_id,
-                COUNT(e.learner_id) AS learner_count
+                COUNT(e.learner_id) AS learner_count,
+                (SELECT COUNT(*) FROM certificate ce WHERE ce.course_id = c.course_id) AS cert_count
             FROM course c
             LEFT JOIN enrollment e ON c.course_id = e.course_id
             WHERE 1 = 1
@@ -157,13 +228,13 @@ def get_course(course_id):
 def create_course(data):
     """เพิ่ม คอร์ส ใหม่ — data มีคีย์: title, category, price, prerequisite_id"""
     # TODO: INSERT INTO course (...) VALUES (%s, ...)
-    if float(data.get("price", 0)) < 0:
-        raise ValueError("ราคาไม่สามารถติดลบได้")
+    _require(data, {"title": "ชื่อคอร์ส", "category": "หมวดหมู่"})
+    price = _parse_price(data.get("price"))
 
     sql = ("INSERT INTO course (title, category, price, prerequisite_id) VALUES (%s, %s, %s, %s)")
     params = (data.get("title"),
               data.get("category"),
-              data.get("price"),
+              price,
               blank_to_none(data.get("prerequisite_id"))
     )
     return run_command(sql , params)
@@ -173,24 +244,27 @@ def create_course(data):
 def update_course(course_id, data):
     """แก้ไข คอร์ส ตาม course_id"""
     # TODO: UPDATE course SET ... WHERE course_id=%s
+    _require(data, {"title": "ชื่อคอร์ส", "category": "หมวดหมู่"})
+    price = _parse_price(data.get("price"))
+    prereq = blank_to_none(data.get("prerequisite_id"))
+    if prereq is not None and str(prereq) == str(course_id):
+        raise ValueError("คอร์สไม่สามารถกำหนดให้ต้องเรียนตัวเองก่อนได้")
     sql =("UPDATE course SET title = %s, category = %s, price = %s, prerequisite_id = %s WHERE course_id=%s")
     params = (
         data["title"],
         data["category"],
-        data["price"],
-        blank_to_none(data["prerequisite_id"]),
+        price,
+        prereq,
         course_id,
     )
     return run_command(sql, params)
 
 
 def delete_course(course_id):
-    """ลบ คอร์ส ตาม course_id"""
-    sql = ("DELETE FROM course WHERE course_id=%s")
-    params = (course_id,)
-    return run_command(sql,params)
-    # TODO: DELETE FROM course WHERE course_id=%s
-    _todo("delete_course")
+    """ลบ คอร์ส — ลบไม่ได้ถ้ามีการลงทะเบียนที่กำลังเรียน/เรียนจบแล้ว"""
+    if has_blocking_enrollment("course_id", course_id):
+        raise ValueError("ลบไม่ได้: คอร์สนี้มีการลงทะเบียนที่กำลังเรียนหรือเรียนจบแล้ว")
+    return run_command("DELETE FROM course WHERE course_id=%s", (course_id,))
 
 # ---------- การลงทะเบียน (enrollment) ----------
 def search_enrollments(filters):
@@ -203,6 +277,11 @@ def search_enrollments(filters):
                c.title AS course_title,
                e.enroll_date,
                e.status,
+               CASE e.want_cert WHEN 'yes' THEN 'ต้องการ' WHEN 'no' THEN 'ไม่ต้องการ' ELSE e.want_cert END AS want_cert,
+               CASE
+                   WHEN EXISTS (SELECT 1 FROM certificate ce WHERE ce.learner_id = e.learner_id AND ce.course_id = e.course_id)
+                   THEN 'มีแล้ว' ELSE 'ยังไม่มี'
+               END AS has_cert,
                e.completed_date,
                CASE
                    WHEN e.status = 'completed' THEN CONCAT(DATEDIFF(e.completed_date, e.enroll_date), ' วัน')
@@ -275,67 +354,98 @@ def check_course_complete(learner_id, course_id):
         "JOIN lesson l ON p.lesson_id = l.lesson_id "
         "WHERE p.learner_id = %s AND l.course_id = %s AND p.watched = TRUE",
         (learner_id, course_id))
-    # 3) เทียบกัน: ดูจบ < จำนวนบททั้งหมด → ยังไม่ครบ
+    
     if not done or not total or done[0]["n"] < total[0]["n"]:
-        raise ValueError("ยังดูบทเรียนไม่ครบ จึงยังไม่สามารถเรียนจบคอร์สนี้ได้")
-
+        n_done = done[0]["n"] if done else 0
+        n_total = total[0]["n"] if total else 0
+        raise ValueError(f"ยังดูบทเรียนไม่ครบ (ดูแล้ว {n_done}/{n_total} บท) จึงยังไม่สามารถเรียนจบคอร์สนี้ได้")
+    
+def validate_enrollment_input(enroll_date, status, completed_date):
+    if blank_to_none(enroll_date) is None:
+        raise ValueError("กรุณากรอกวันที่ลงทะเบียน")
+    if status == "completed" and completed_date and str(enroll_date) > str(completed_date):
+        raise ValueError("วันที่ลงทะเบียนต้องไม่หลังวันที่เรียนจบ")
+    
 def create_enrollment(data):
-    """เพิ่ม การลงทะเบียน ใหม่ — data มีคีย์: learner_id, course_id, enroll_date, status
-    คำใบ้:
-      1) เรียก check_can_enroll(data["learner_id"], data["course_id"]) ก่อน
-      2) INSERT INTO enrollment (...) VALUES (%s, ...)"""
+    """เพิ่ม การลงทะเบียน ใหม่ — data มีคีย์: learner_id, course_id, enroll_date, status"""
+    _require(data, {"learner_id": "ผู้เรียน", "course_id": "คอร์ส", "enroll_date": "วันที่ลงทะเบียน"})
     check_can_enroll(data["learner_id"], data["course_id"])
-    # คำนวณ status + completed_date (เฉพาะตอนจบแล้วถึงมีวันเรียนจบ)
+   
+    
     status = data.get("status") or "studying"
+    want_cert = _parse_want_cert(data.get("want_cert"))
     completed_date = date.today().isoformat() if status == "completed" else None
-    sql = "INSERT INTO enrollment (learner_id, course_id, enroll_date, status, completed_date) VALUES (%s, %s, %s, %s, %s)"
-    params = (data["learner_id"], data["course_id"], data["enroll_date"], status, completed_date)
-    return run_command(sql, params)
+    if status == "completed":
+        check_course_complete(data["learner_id"], data["course_id"])
+    validate_enrollment_input(data["enroll_date"], status, completed_date)
+    sql = "INSERT INTO enrollment (learner_id, course_id, enroll_date, status, want_cert, completed_date) VALUES (%s, %s, %s, %s, %s, %s)"
+    params = (data["learner_id"], data["course_id"], data["enroll_date"], status, want_cert, completed_date)
+    result = run_command(sql, params)
+    if status == "completed" and want_cert == "yes":
+        run_command(
+            "INSERT INTO certificate (learner_id, course_id) VALUES (%s, %s)",
+            (data["learner_id"], data["course_id"]))
+    return result
 
 
 def update_enrollment(enroll_id, data):
-    """แก้ไข การลงทะเบียน ตาม enroll_id
-    คำใบ้:
-      1) ถ้าเปลี่ยนผู้เรียนหรือคอร์ส (เทียบกับค่าเดิมจาก get_enrollment) →
-         check_can_enroll(data["learner_id"], data["course_id"], enroll_id)
-         (แก้แค่สถานะ เช่น studying → completed ไม่ต้องตรวจ)
-      2) UPDATE enrollment SET ... WHERE enroll_id=%s"""
-    # ดึงค่าเดิม เช็คว่ามี enrollment นี้จริงไหม
+    """แก้ไข การลงทะเบียน ตาม enroll_id — การลงทะเบียนที่เรียนจบแล้วเปลี่ยนสถานะกลับไม่ได้"""
+    
     old = get_enrollment(enroll_id)
     if not old:
         raise ValueError("ไม่พบข้อมูลการลงทะเบียน")
 
-    # กันลงซ้ำ + ตรวจ prerequisite (เฉพาะเมื่อเปลี่ยนผู้เรียน/คอร์ส)
+    _require(data, {"learner_id": "ผู้เรียน", "course_id": "คอร์ส", "enroll_date": "วันที่ลงทะเบียน"})
     if str(data.get("learner_id")) != str(old["learner_id"]) or str(data.get("course_id")) != str(old["course_id"]):
         check_can_enroll(data["learner_id"], data["course_id"], enroll_id)
 
-    
     new_status = data.get("status") or "studying"
+    want_cert = _parse_want_cert(data.get("want_cert") or old.get("want_cert"))
+    if old["status"] == "completed" and new_status != "completed":
+        raise ValueError("แก้ไม่ได้: การลงทะเบียนที่เรียนจบแล้วเปลี่ยนสถานะกลับไม่ได้")
+
     if new_status == "completed":
         if old["status"] == "completed":
-            completed_date = old.get("completed_date")  
+            completed_date = old.get("completed_date")
         else:
-            completed_date = date.today().isoformat()    
+            completed_date = date.today().isoformat()
     else:
-        completed_date = None                            
+        completed_date = None
 
-    
+    validate_enrollment_input(data["enroll_date"], new_status, completed_date)
+
+    exist = run_query(
+        "SELECT COUNT(*) AS n FROM certificate WHERE learner_id = %s AND course_id = %s",
+        (data["learner_id"], data["course_id"]))
+    has_cert = bool(exist and exist[0]["n"] > 0)
+
     if new_status == "completed" and old["status"] != "completed":
         check_course_complete(data["learner_id"], data["course_id"])
-        exist = run_query(
-            "SELECT COUNT(*) AS n FROM certificate WHERE learner_id = %s AND course_id = %s",
-            (data["learner_id"], data["course_id"]))
-        if exist and exist[0]["n"] > 0:
+        if has_cert:
             raise ValueError("ผู้เรียนมีใบรับรองของคอร์สนี้แล้ว")
+        if want_cert == "yes":
+            run_command(
+                "INSERT INTO certificate (learner_id, course_id) VALUES (%s, %s)",
+                (data["learner_id"], data["course_id"]))
+    elif (new_status == "completed" and old["status"] == "completed"
+          and want_cert == "yes" and old.get("want_cert") != "yes" and not has_cert):
         run_command(
             "INSERT INTO certificate (learner_id, course_id) VALUES (%s, %s)",
             (data["learner_id"], data["course_id"]))
 
-    
-    sql = "UPDATE enrollment SET learner_id = %s, course_id = %s, enroll_date = %s, status = %s, completed_date = %s WHERE enroll_id = %s"
-    params = (data["learner_id"], data["course_id"], data["enroll_date"], new_status, completed_date, enroll_id)
+    sql = "UPDATE enrollment SET learner_id = %s, course_id = %s, enroll_date = %s, status = %s, want_cert = %s, completed_date = %s WHERE enroll_id = %s"
+    params = (data["learner_id"], data["course_id"], data["enroll_date"], new_status, want_cert, completed_date, enroll_id)
     return run_command(sql, params)
 
+def has_blocking_enrollment(column, _id):
+    """คอลัมน์ที่อนุญาตมีแค่ learner_id / course_id (เป็นค่าคงที่ในโค้ด ไม่ใช่ input)"""
+    if column not in ("learner_id", "course_id"):
+        raise ValueError("คอลัมน์ไม่ถูกต้อง")
+    rows = run_query(
+        "SELECT COUNT(*) AS n FROM enrollment "
+        f"WHERE {column} = %s AND status IN ('studying', 'completed')",
+        (_id,))
+    return bool(rows and rows[0]["n"])
 
 def delete_enrollment(enroll_id):
     """ลบ การลงทะเบียน ตาม enroll_id — ลบได้เฉพาะสถานะ 'cancelled'
@@ -349,6 +459,22 @@ def delete_enrollment(enroll_id):
 
     sql = "DELETE FROM enrollment WHERE enroll_id = %s"
     return run_command(sql, (enroll_id,))
+
+
+def request_certificate(enroll_id):
+    row = get_enrollment(enroll_id)
+    if not row:
+        raise ValueError("ไม่พบข้อมูลการลงทะเบียน")
+    if row["status"] != "completed":
+        raise ValueError("ยังเรียนคอร์สนี้ไม่จบ จึงขอใบรับรองไม่ได้")
+    exist = run_query(
+        "SELECT COUNT(*) AS n FROM certificate WHERE learner_id = %s AND course_id = %s",
+        (row["learner_id"], row["course_id"]))
+    if exist and exist[0]["n"] > 0:
+        raise ValueError("ผู้เรียนมีใบรับรองของคอร์สนี้อยู่แล้ว")
+    return run_command(
+        "INSERT INTO certificate (learner_id, course_id) VALUES (%s, %s)",
+        (row["learner_id"], row["course_id"]))
 
 # ---------- certificate ----------
 def search_certificate(filters):
@@ -388,6 +514,7 @@ def get_certificate(cer_id):
 
 def create_certificate(data):
     """ออกใบรับรองใหม่ — ต้องเรียนคอร์สนั้นจบแล้วเท่านั้น"""
+    _require(data, {"learner_id": "ผู้เรียน", "course_id": "คอร์ส"})
     done = run_query(
         "SELECT COUNT(*) AS n FROM enrollment WHERE learner_id = %s AND course_id = %s AND status = 'completed'",
         (data["learner_id"], data["course_id"]))
@@ -411,9 +538,26 @@ def create_certificate(data):
 
 
 def update_certificate(cer_id, data):
-    """แก้ไขใบรับรองตาม cer_id"""
+    """แก้ไขใบรับรองตาม cer_id — เช็คครบทุกช่อง + ห้ามซ้ำกับใบรับรองใบอื่น
+    (ไม่เช็ค status enrollment ตอนแก้ เพราะข้อมูลตัวอย่างใน schema มีใบรับรอง
+     ที่ออกไว้ก่อน — เช็คเฉพาะตอนออกใบรับรองใหม่ใน create_certificate)"""
+    _require(data, {"learner_id": "ผู้เรียน", "course_id": "คอร์ส"})
+
+    exist = run_query(
+        "SELECT COUNT(*) AS n FROM certificate WHERE learner_id = %s AND course_id = %s AND cer_id <> %s",
+        (data["learner_id"], data["course_id"], cer_id))
+    if exist and exist[0]["n"] > 0:
+        raise ValueError("ผู้เรียนคนนี้มีใบรับรองของคอร์สนี้แล้ว")
+
+    issue_date = blank_to_none(data.get("issue_date"))
+    if issue_date is None:   # ไม่ได้กรอกวันที่ → คงวันที่ออกเดิมไว้
+        old = get_certificate(cer_id)
+        if not old:
+            raise ValueError("ไม่พบใบรับรอง")
+        issue_date = old["issue_date"]
+
     sql = "UPDATE certificate SET learner_id = %s, course_id = %s, issue_date = %s WHERE cer_id = %s"
-    params = (data["learner_id"], data["course_id"], data["issue_date"], cer_id)
+    params = (data["learner_id"], data["course_id"], issue_date, cer_id)
     return run_command(sql, params)
 
 
@@ -428,47 +572,328 @@ def delete_certificate(cer_id):
 #  ★ ชื่อคอลัมน์ใน SELECT จะกลายเป็นหัวตารางบนเว็บ — ใช้ AS 'ชื่อภาษาไทย' ได้
 # ============================================================
 def report_summary():
-    """ตัวเลขสรุปบนการ์ด dashboard — คืน dict {ชื่อการ์ด: ตัวเลข}  (1 คีย์ = 1 การ์ด)
-    ตอนนี้ยังไม่ได้เขียน SQL → คืนค่า None ทุกการ์ด หน้าเว็บจึงแสดง "—" รอไว้
-    ★ งานของนิสิต: เขียน SQL ตามตัวอย่างด้านล่าง (1 คอลัมน์ใน SELECT = 1 การ์ด
-      ชื่อหลัง AS = ข้อความใต้ตัวเลข) แล้วลบ return {...} ชุดล่างสุดทิ้ง
-    ★ การ์ด "คิดเพิ่มเอง" 2 ใบ: ตั้งชื่อการ์ดใหม่ แล้วเขียน SQL เอง
-    ★ ผลรวมเงินใช้ IFNULL(SUM(...), 0) — ถ้ายังไม่มีข้อมูล SUM จะได้ NULL"""
-    # ---- ตัวอย่างเมื่อเขียน SQL แล้ว (เอา # ข้างหน้าออก แล้วเติมให้ครบทุกการ์ด) ----
-    # sql = """SELECT
-    #            (SELECT COUNT(*) FROM ...) AS 'ผู้เรียน',
-    #            (SELECT ...)               AS 'คอร์ส',
-    #            ...
-    #          """
-    # return run_query(sql)[0]      ← [0] = เอาแถวแรก (ผลมีแถวเดียว) ได้เป็น dict
-
-    # TODO: ระหว่างที่ยังไม่ได้เขียน SQL คืนค่า None ให้การ์ดแสดง "—" รอไว้
-    return {
-        "ผู้เรียน":       None,   # (SELECT COUNT(*) FROM learner)
-        "คอร์ส":          None,   # นับคอร์สทั้งหมด
-        "การลงทะเบียน":   None,   # นับการลงทะเบียนทั้งหมด
-        "บทเรียน":        None,   # นับบทเรียนทั้งหมด
-        "คิดเพิ่มเอง 1":  None,   # ตั้งชื่อการ์ดใหม่ + เขียน SQL เอง
-        "คิดเพิ่มเอง 2":  None,   # ตั้งชื่อการ์ดใหม่ + เขียน SQL เอง
-    }
+    sql = """
+        SELECT
+            (SELECT COUNT(*) FROM learner)     AS 'ผู้เรียน',
+            (SELECT COUNT(*) FROM course)      AS 'คอร์ส',
+            (SELECT COUNT(*) FROM enrollment)  AS 'การลงทะเบียน',
+            (SELECT COUNT(*) FROM lesson)      AS 'บทเรียน',
+            (SELECT COUNT(*) FROM certificate) AS 'ใบรับรองที่ออกแล้ว',
+            IFNULL((SELECT SUM(c.price)
+                    FROM enrollment e
+                    INNER JOIN course c ON c.course_id = e.course_id
+                    WHERE e.status = 'completed'), 0) AS 'รายได้รวม (บาท)'
+    """
+    return run_query(sql)[0]
 
 def report_popular_courses():
-    """📈 คอร์สยอดนิยม (Most Enrolled)
-    คำใบ้: JOIN enrollment→course, GROUP BY course, COUNT, ORDER BY DESC, LIMIT 5"""
-    # TODO: เขียน SQL รายงานนี้ (เขียน JOIN แบบ explicit INNER JOIN ... ON ...)
-    _todo("report_popular_courses")
+    sql = """
+        SELECT c.course_id AS 'รหัสคอร์ส',
+               c.title     AS 'ชื่อคอร์ส',
+               c.category  AS 'หมวดหมู่',
+               COUNT(e.enroll_id) AS 'จำนวนผู้ลงทะเบียน'
+        FROM course c
+        INNER JOIN enrollment e ON e.course_id = c.course_id
+        GROUP BY c.course_id, c.title, c.category
+        ORDER BY COUNT(e.enroll_id) DESC, c.title ASC
+        LIMIT 5
+    """
+    return run_query(sql)
+
 
 def report_completion_rate():
-    """✅ อัตราการเรียนจบต่อคอร์ส (Completion Rate)
-    คำใบ้: GROUP BY course, นับ completed เทียบทั้งหมด ด้วย SUM(CASE WHEN ...)"""
-    # TODO: เขียน SQL รายงานนี้ (เขียน JOIN แบบ explicit INNER JOIN ... ON ...)
-    _todo("report_completion_rate")
+    sql = """
+        SELECT c.course_id AS 'รหัสคอร์ส',
+               c.title     AS 'ชื่อคอร์ส',
+               COUNT(e.enroll_id) AS 'ผู้ลงทะเบียนทั้งหมด',
+               SUM(CASE WHEN e.status = 'completed' THEN 1 ELSE 0 END) AS 'เรียนจบ',
+               ROUND(100 * SUM(CASE WHEN e.status = 'completed' THEN 1 ELSE 0 END)
+                     / NULLIF(COUNT(e.enroll_id), 0), 1) AS 'อัตราการเรียนจบ (%)'
+        FROM course c
+        LEFT JOIN enrollment e ON e.course_id = c.course_id
+        GROUP BY c.course_id, c.title
+        ORDER BY c.course_id
+    """
+    return run_query(sql)
+
 
 def report_course_prerequisites():
-    """🔗 คอร์สและวิชาที่ต้องเรียนก่อน (Self-Join)
-    คำใบ้: self-join: course c LEFT JOIN course pre ON c.prerequisite_id = pre.course_id"""
-    # TODO: เขียน SQL รายงานนี้ (เขียน JOIN แบบ explicit INNER JOIN ... ON ...)
-    _todo("report_course_prerequisites")
+    sql = """
+        SELECT c.course_id AS 'รหัสคอร์ส',
+               c.title     AS 'ชื่อคอร์ส',
+               c.category  AS 'หมวดหมู่',
+               COALESCE(pre.title, 'ไม่มี') AS 'วิชาที่ต้องเรียนก่อน'
+        FROM course c
+        LEFT JOIN course pre ON pre.course_id = c.prerequisite_id
+        ORDER BY c.course_id
+    """
+    return run_query(sql)
+
+
+def report_learner_progress():
+    sql = """
+        SELECT l.learner_id AS 'รหัสผู้เรียน',
+               l.name       AS 'ชื่อผู้เรียน',
+               COUNT(e.enroll_id) AS 'ลงทะเบียน (คอร์ส)',
+               SUM(CASE WHEN e.status = 'completed' THEN 1 ELSE 0 END) AS 'เรียนจบ',
+               SUM(CASE WHEN e.status = 'studying'  THEN 1 ELSE 0 END) AS 'กำลังเรียน',
+               (SELECT COUNT(*) FROM certificate ce
+                WHERE ce.learner_id = l.learner_id) AS 'ใบรับรอง'
+        FROM learner l
+        LEFT JOIN enrollment e ON e.learner_id = l.learner_id
+        GROUP BY l.learner_id, l.name
+        ORDER BY l.learner_id
+    """
+    return run_query(sql)
+
+
+def report_revenue_by_category():
+    sql = """
+        SELECT c.category AS 'หมวดหมู่',
+               COUNT(DISTINCT c.course_id) AS 'จำนวนคอร์ส',
+               COUNT(CASE WHEN e.status = 'completed' THEN 1 END) AS 'ลงทะเบียนที่เรียนจบ',
+               IFNULL(SUM(CASE WHEN e.status = 'completed' THEN c.price END), 0) AS 'รายได้ (บาท)'
+        FROM course c
+        LEFT JOIN enrollment e ON e.course_id = c.course_id
+        GROUP BY c.category
+        ORDER BY IFNULL(SUM(CASE WHEN e.status = 'completed' THEN c.price END), 0) DESC,
+                 c.category ASC
+    """
+    return run_query(sql)
+
+
+def report_learners_without_enrollment():
+    sql = """
+        SELECT l.learner_id AS 'รหัสผู้เรียน',
+               l.name       AS 'ชื่อผู้เรียน',
+               l.email      AS 'อีเมล',
+               l.join_date  AS 'วันที่สมัคร'
+        FROM learner l
+        WHERE NOT EXISTS (SELECT 1 FROM enrollment e WHERE e.learner_id = l.learner_id)
+        ORDER BY l.learner_id
+    """
+    return run_query(sql)
+
+
+def report_pending_lessons():
+    sql = """
+        SELECT l.name        AS 'ชื่อผู้เรียน',
+               c.title       AS 'คอร์ส',
+               le.sec_no     AS 'บทที่',
+               le.title      AS 'บทเรียนที่ยังไม่ดู',
+               le.duration_min AS 'ความยาว (นาที)'
+        FROM enrollment e
+        INNER JOIN learner l  ON l.learner_id  = e.learner_id
+        INNER JOIN course  c  ON c.course_id   = e.course_id
+        INNER JOIN lesson  le ON le.course_id  = e.course_id
+        LEFT JOIN progress p  ON p.learner_id  = e.learner_id
+                             AND p.lesson_id   = le.lesson_id
+                             AND p.watched      = TRUE
+        WHERE e.status = 'studying' AND p.lesson_id IS NULL
+        ORDER BY l.name, c.title, le.sec_no
+    """
+    return run_query(sql)
+
+
+def _learner_name(learner_id):
+    rows = run_query("SELECT name FROM learner WHERE learner_id = %s", (learner_id,))
+    return rows[0]["name"] if rows else None
+
+
+def _course_title(course_id):
+    rows = run_query("SELECT title FROM course WHERE course_id = %s", (course_id,))
+    return rows[0]["title"] if rows else None
+
+
+def _count(sql, params=()):
+    rows = run_query(sql, params)
+    return rows[0]["n"] if rows else 0
+
+
+def _result(action, allowed, message, steps=None, warnings=None):
+    return {
+        "action": action,
+        "allowed": allowed,
+        "message": message,
+        "steps": steps or [],
+        "warnings": warnings or [],
+    }
+
+
+def simulate(action, params):
+    p = params or {}
+
+    def to_int(key):
+        try:
+            return int(p.get(key))
+        except (TypeError, ValueError):
+            return None
+
+    if action == "enroll":
+        learner_id, course_id = to_int("learner_id"), to_int("course_id")
+        if learner_id is None or course_id is None:
+            return _result(action, False, "กรุณาเลือกผู้เรียนและคอร์สให้ครบ")
+        learner, course = _learner_name(learner_id), _course_title(course_id)
+        if learner is None:
+            return _result(action, False, f"ไม่พบผู้เรียนรหัส {learner_id}")
+        if course is None:
+            return _result(action, False, f"ไม่พบคอร์สรหัส {course_id}")
+        try:
+            check_can_enroll(learner_id, course_id)
+        except ValueError as e:
+            return _result(action, False, str(e), ["ระบบจะไม่บันทึกข้อมูลใด ๆ"])
+        warnings = []
+        pre = run_query("SELECT prerequisite_id FROM course WHERE course_id = %s", (course_id,))
+        if pre and pre[0]["prerequisite_id"]:
+            warnings.append("คอร์สนี้บังคับวิชาก่อน '" + _course_title(pre[0]["prerequisite_id"]) +
+                            "' — ตรวจแล้วว่าผู้เรียนผ่านมาแล้ว")
+        total = _count("SELECT COUNT(*) AS n FROM enrollment WHERE course_id = %s", (course_id,))
+        return _result(action, True, f"ลงทะเบียนได้: {learner} → {course}",
+                       ["เพิ่มแถวในตาราง enrollment 1 แถว (status = 'studying', completed_date = NULL)",
+                        f"learner_count ของ '{course}' เพิ่มจาก {total} เป็น {total + 1}"],
+                       warnings)
+
+    if action == "complete":
+        learner_id, course_id = to_int("learner_id"), to_int("course_id")
+        if learner_id is None or course_id is None:
+            return _result(action, False, "กรุณาเลือกผู้เรียนและคอร์สให้ครบ")
+        learner, course = _learner_name(learner_id), _course_title(course_id)
+        if learner is None or course is None:
+            return _result(action, False, "ไม่พบผู้เรียนหรือคอร์สที่เลือก")
+        rows = run_query(
+            "SELECT status FROM enrollment WHERE learner_id = %s AND course_id = %s "
+            "ORDER BY enroll_id DESC LIMIT 1", (learner_id, course_id))
+        if not rows:
+            return _result(action, False, f"{learner} ยังไม่ลงทะเบียนคอร์ส '{course}'")
+        if rows[0]["status"] == "completed":
+            return _result(action, False, f"{learner} เรียนจบ '{course}' ไปแล้ว")
+        try:
+            check_course_complete(learner_id, course_id)
+        except ValueError as e:
+            return _result(action, False, str(e), ["สถานะยังคงเป็น 'studying'"])
+        cert = _count("SELECT COUNT(*) AS n FROM certificate WHERE learner_id = %s AND course_id = %s",
+                      (learner_id, course_id))
+        if cert:
+            return _result(action, False, "ผู้เรียนมีใบรับรองของคอร์สนี้แล้ว ระบบจึงไม่ยอมเปลี่ยนสถานะ")
+        return _result(action, True, f"เปลี่ยนเป็นเรียนจบได้: {learner} → {course}",
+                       ["enrollment.status → 'completed'",
+                        "enrollment.completed_date → วันที่ปัจจุบัน",
+                        "ออกใบรับรอง (certificate) ให้อัตโนมัติ 1 ใบ"])
+
+    if action == "delete_learner":
+        learner_id = to_int("learner_id")
+        learner = _learner_name(learner_id) if learner_id is not None else None
+        if learner is None:
+            return _result(action, False, "ไม่พบผู้เรียนที่เลือก")
+        blocked = _count("SELECT COUNT(*) AS n FROM enrollment WHERE learner_id = %s "
+                         "AND status IN ('studying','completed')", (learner_id,))
+        if blocked:
+            return _result(action, False,
+                           f"ลบไม่ได้: {learner} มีการลงทะเบียนที่กำลังเรียน/เรียนจบอยู่ {blocked} รายการ",
+                           ["ต้องยกเลิก (cancelled) การลงทะเบียนเหล่านั้นก่อนจึงจะลบได้"])
+        enrolls = _count("SELECT COUNT(*) AS n FROM enrollment WHERE learner_id = %s", (learner_id,))
+        progress = _count("SELECT COUNT(*) AS n FROM progress WHERE learner_id = %s", (learner_id,))
+        cert = _count("SELECT COUNT(*) AS n FROM certificate WHERE learner_id = %s", (learner_id,))
+        warnings = []
+        if enrolls or progress or cert:
+            warnings.append("ข้อมูลของผู้เรียนคนนี้จะหายถาวร กู้คืนไม่ได้")
+        return _result(action, True, f"ลบผู้เรียน '{learner}' ได้",
+                       ["ลบผู้เรียน 1 แถว",
+                        f"ลบการลงทะเบียนที่เหลือ (cancelled) {enrolls} แถว (ON DELETE CASCADE)",
+                        f"ลบความคืบหน้าการดูบทเรียน {progress} แถว (ON DELETE CASCADE)",
+                        f"ลบใบรับรอง {cert} ใบ (ON DELETE CASCADE)"],
+                       warnings)
+
+    if action == "delete_course":
+        course_id = to_int("course_id")
+        course = _course_title(course_id) if course_id is not None else None
+        if course is None:
+            return _result(action, False, "ไม่พบคอร์สที่เลือก")
+        blocked = _count("SELECT COUNT(*) AS n FROM enrollment WHERE course_id = %s "
+                         "AND status IN ('studying','completed')", (course_id,))
+        if blocked:
+            return _result(action, False,
+                           f"ลบไม่ได้: คอร์ส '{course}' มีผู้ลงทะเบียนที่กำลังเรียน/เรียนจบอยู่ {blocked} รายการ")
+        lessons = _count("SELECT COUNT(*) AS n FROM lesson WHERE course_id = %s", (course_id,))
+        enrolls = _count("SELECT COUNT(*) AS n FROM enrollment WHERE course_id = %s", (course_id,))
+        deps = run_query("SELECT title FROM course WHERE prerequisite_id = %s", (course_id,))
+        warnings = []
+        if deps:
+            warnings.append("คอร์สที่ต้องเรียนก่อนหน้านี้: " +
+                            ", ".join(d["title"] for d in deps) +
+                            " → prerequisite_id จะถูกตั้งเป็น NULL")
+        return _result(action, True, f"ลบคอร์ส '{course}' ได้",
+                       ["ลบคอร์ส 1 แถว",
+                        f"ลบบทเรียนทั้งหมด {lessons} บท (ON DELETE CASCADE)",
+                        f"ลบการลงทะเบียนที่เหลือ {enrolls} แถว (ON DELETE CASCADE)",
+                        "ความคืบหน้าของบทเรียนเหล่านั้นถูกลบตามไปด้วย"],
+                       warnings)
+
+    if action == "delete_enrollment":
+        enroll_id = to_int("enroll_id")
+        row = get_enrollment(enroll_id) if enroll_id is not None else None
+        if not row:
+            return _result(action, False, "ไม่พบการลงทะเบียนที่เลือก")
+        if row["status"] != "cancelled":
+            return _result(action, False,
+                           f"ลบไม่ได้: สถานะเป็น {row['status']} ต้องยกเลิกก่อน",
+                           ["ใช้การกระทำ 'ยกเลิกการลงทะเบียน' ก่อน แล้วจึงลบ"])
+        return _result(action, True, f"ลบการลงทะเบียน #{enroll_id} ได้",
+                       ["ลบแถวในตาราง enrollment 1 แถว"])
+
+    if action == "cancel_enrollment":
+        enroll_id = to_int("enroll_id")
+        row = get_enrollment(enroll_id) if enroll_id is not None else None
+        if not row:
+            return _result(action, False, "ไม่พบการลงทะเบียนที่เลือก")
+        if row["status"] == "completed":
+            return _result(action, False, "ยกเลิกไม่ได้: เรียนจบแล้วเปลี่ยนสถานะกลับไม่ได้")
+        if row["status"] == "cancelled":
+            return _result(action, False, "การลงทะเบียนนี้ถูกยกเลิกอยู่แล้ว")
+        return _result(action, True, f"ยกเลิกการลงทะเบียน #{enroll_id} ได้",
+                       ["enrollment.status → 'cancelled'",
+                        "enrollment.completed_date → NULL"],
+                       ["ความคืบหน้าการดูบทเรียนยังอยู่ แต่ไม่ถูกนับรวมกับคอร์สนี้",
+                        "ถ้าคอร์สนี้ถูกใช้เป็น prerequisite ผู้เรียนจะยังไม่ถือว่าผ่าน"])
+
+    if action == "set_prerequisite":
+        course_id, prereq_id = to_int("course_id"), to_int("prerequisite_id")
+        course = _course_title(course_id) if course_id is not None else None
+        if course is None:
+            return _result(action, False, "ไม่พบคอร์สที่เลือก")
+        if prereq_id in (None, 0):
+            return _result(action, True, f"เอาวิชาที่ต้องเรียนก่อนของ '{course}' ออก",
+                           ["course.prerequisite_id → NULL"])
+        if prereq_id == course_id:
+            return _result(action, False, "คอร์สอ้างตัวเองเป็นวิชาที่ต้องเรียนก่อนไม่ได้")
+        prereq = _course_title(prereq_id)
+        if prereq is None:
+            return _result(action, False, "ไม่พบวิชาที่ต้องเรียนก่อนที่เลือก")
+        seen, cur = set(), prereq_id
+        while cur:
+            if cur == course_id:
+                return _result(action, False,
+                               f"ตั้งไม่ได้: จะเกิดวงกลม prerequisite ระหว่าง '{course}' กับ '{prereq}'")
+            if cur in seen:
+                break
+            seen.add(cur)
+            nxt = run_query("SELECT prerequisite_id FROM course WHERE course_id = %s", (cur,))
+            cur = nxt[0]["prerequisite_id"] if nxt else None
+        affected = run_query(
+            "SELECT l.name FROM enrollment e "
+            "INNER JOIN learner l ON l.learner_id = e.learner_id "
+            "WHERE e.course_id = %s AND e.status IN ('studying','completed') "
+            "AND NOT EXISTS (SELECT 1 FROM enrollment pe WHERE pe.learner_id = e.learner_id "
+            "AND pe.course_id = %s AND pe.status = 'completed')", (course_id, prereq_id))
+        warnings = []
+        if affected:
+            warnings.append("ผู้เรียนที่ลงทะเบียนคอร์สนี้แล้วแต่ยังไม่ผ่านวิชาก่อน: " +
+                            ", ".join(a["name"] for a in affected))
+        warnings.append(f"ผู้เรียนใหม่จะลงทะเบียน '{course}' ไม่ได้จนกว่าจะเรียน '{prereq}' จบก่อน")
+        return _result(action, True, f"ตั้ง '{course}' ให้ต้องเรียน '{prereq}' ก่อน",
+                       [f"course.prerequisite_id → {prereq_id}"], warnings)
+
+    return _result(action, False, f"ไม่รู้จักการกระทำ '{action}'")
 
 # ============================================================
 #  รายการรายงานที่แสดงบนหน้า /report  (เรียงตามลำดับที่แสดง)
@@ -479,8 +904,11 @@ def report_course_prerequisites():
 #  ★ ห้ามตั้งชื่อ url ว่า "summary" (ใช้แล้วสำหรับการ์ดสรุป)
 # ============================================================
 REPORTS = [
-    ("popular-courses", "📈 คอร์สยอดนิยม (Most Enrolled)",              report_popular_courses),
-    ("completion-rate", "✅ อัตราการเรียนจบต่อคอร์ส (Completion Rate)", report_completion_rate),
-    ("prerequisites",   "🔗 คอร์สและวิชาที่ต้องเรียนก่อน (Self-Join)",  report_course_prerequisites),
-    # ("my-report", "📋 รายงานของฉัน", report_my_report),   ← ตัวอย่างการเพิ่มรายงานที่ 4
+    ("popular-courses",     "คอร์สยอดนิยม (Most Enrolled)",              report_popular_courses),
+    ("completion-rate",     "อัตราการเรียนจบต่อคอร์ส (Completion Rate)", report_completion_rate),
+    ("prerequisites",       "คอร์สและวิชาที่ต้องเรียนก่อน (Self-Join)",  report_course_prerequisites),
+    ("learner-progress",    "ความคืบหน้าของผู้เรียนแต่ละคน",              report_learner_progress),
+    ("revenue-by-category", "รายได้ตามหมวดหมู่คอร์ส",                    report_revenue_by_category),
+    ("no-enrollment",       "ผู้เรียนที่ยังไม่ลงทะเบียนคอร์สใดเลย",        report_learners_without_enrollment),
+    ("pending-lessons",     "บทเรียนที่ยังดูไม่ครบ (เฉพาะกำลังเรียน)",     report_pending_lessons),
 ]

@@ -9,7 +9,7 @@
 3. ออกแบบและสร้างตารางใน `schema.sql` แล้วรันบน MySQL ของตัวเอง
 4. `python app.py` → เปิด http://127.0.0.1:5000
 
-> เปิดมาจะเห็นหน้าเว็บ แต่กดค้นหาจะขึ้น 🚧 TODO จนกว่าจะเขียน SQL ครบ
+> เปิดมาจะเห็นหน้าเว็บ แต่กดค้นหาจะขึ้น TODO จนกว่าจะเขียน SQL ครบ
 
 ## งานที่ต้องทำใน db.py (มองหา # TODO)
 **CRUD:**
@@ -21,9 +21,9 @@
 
 **รายงาน (JOIN + GROUP BY + subquery):**
   - report_summary — การ์ดสรุป (เขียน SQL แทนค่า None ทีละการ์ด + คิดการ์ดเพิ่มเอง 2 ใบ)
-  - report_popular_courses — 📈 คอร์สยอดนิยม (Most Enrolled)
-  - report_completion_rate — ✅ อัตราการเรียนจบต่อคอร์ส (Completion Rate)
-  - report_course_prerequisites — 🔗 คอร์สและวิชาที่ต้องเรียนก่อน (Self-Join)
+  - report_popular_courses — คอร์สยอดนิยม (Most Enrolled)
+  - report_completion_rate — อัตราการเรียนจบต่อคอร์ส (Completion Rate)
+  - report_course_prerequisites — คอร์สและวิชาที่ต้องเรียนก่อน (Self-Join)
   - รายงานเพิ่มเติมที่ออกแบบเอง (ดูหัวข้อ "วิธีเพิ่มรายงานใหม่")
 
 ## ฟีเจอร์ที่ต้องทำให้ใช้งานได้
@@ -36,7 +36,7 @@
    (ชื่อคอลัมน์ที่ตั้งด้วย `AS '...'` จะเป็นหัวตารางบนเว็บ)
 2. เพิ่ม 1 บรรทัดในรายการ `REPORTS` ท้าย db.py
    ```python
-   ("my-report", "📋 รายงานของฉัน", report_my_report),
+   ("my-report", "รายงานของฉัน", report_my_report),
    ```
 3. รีเฟรชหน้า /report — กล่องรายงานใหม่จะขึ้นเอง
 

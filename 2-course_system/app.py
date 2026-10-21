@@ -112,6 +112,10 @@ def enrollment_update(_id):
 def enrollment_delete(_id):
     return safe(db.delete_enrollment, _id)
 
+@app.route("/api/enrollments/<int:_id>/request-cert", methods=["POST"])
+def enrollment_request_cert(_id):
+    return safe(db.request_certificate, _id)
+
 # ---- certificate ----
 @app.route("/api/certificate", methods=["GET"])
 def certificates_list():
@@ -152,6 +156,13 @@ def report_run(key):
         if k == key:
             return safe(fn)
     return jsonify({"ok": False, "error": f"ไม่พบรายงาน '{key}' ใน db.REPORTS"}), 404
+
+
+@app.route("/api/simulate", methods=["POST"])
+def simulate_action():
+    """จำลองเหตุการณ์: บอกผลลัพธ์ถ้าทำ action นี้ โดยไม่แก้ข้อมูลจริง"""
+    body = request.json or {}
+    return safe(db.simulate, body.get("action"), body.get("params"))
 
 
 if __name__ == "__main__":
