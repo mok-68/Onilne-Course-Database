@@ -8,12 +8,23 @@
 </head>
 <body>
   <header class="topbar">
-    <div class="brand">🎓 ระบบคอร์สออนไลน์ <span>Online Course</span></div>
+    <div class="brand">ระบบคอร์สออนไลน์ <span>Online Course</span></div>
     <nav><a href="/">จัดการข้อมูล</a><a href="/report" class="active">รายงาน</a></nav>
   </header>
   <main class="container">
     <!-- การ์ดตัวเลข: สร้างจาก db.report_summary() อัตโนมัติ -->
     <section class="cards" id="summary"></section>
+    <section class="card">
+      <h3>จำลองเหตุการณ์ (What-if)</h3>
+      <p class="hint">เลือกการกระทำ ระบบจะบอกว่าจะเกิดอะไรขึ้นกับฐานข้อมูล โดยไม่แก้ข้อมูลจริง</p>
+      <div class="search-grid">
+        <div class="field"><label>การกระทำ</label><select id="simAction"></select></div>
+      </div>
+      <div class="search-grid" id="simFields"></div>
+      <div class="btn-row"><button class="btn primary" id="btnSim">จำลองเหตุการณ์</button></div>
+      <div id="simStatus" class="status"></div>
+      <div id="simResult"></div>
+    </section>
     <!-- กล่องรายงาน: สร้างจาก db.REPORTS อัตโนมัติ (เพิ่มรายงานที่ db.py ไม่ต้องแก้ไฟล์นี้) -->
     <div id="reports"></div>
   </main>

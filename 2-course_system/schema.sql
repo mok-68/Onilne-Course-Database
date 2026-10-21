@@ -16,12 +16,15 @@ DROP TABLE IF EXISTS certificate;
 DROP TABLE IF EXISTS course;
 DROP TABLE IF EXISTS learner;
 
-
+--เพื่มการสมัคกดดูผู้ใช้ได้ว่ากดเข้าร่วมวันไหน
+--คอสมีใบเสอมั้ย
+--กดรับไบเซอมั้ย
 CREATE TABLE learner (
     learner_id  INT AUTO_INCREMENT PRIMARY KEY,
     name        VARCHAR(100)   NOT NULL,
     email       VARCHAR(100)  UNIQUE NOT NULL,
     join_date   DATE NOT NULL
+    --วันจอยควรมี default 
 );
 
 CREATE TABLE course (
@@ -66,8 +69,6 @@ CREATE TABLE progress (
     FOREIGN KEY (lesson_id) REFERENCES lesson(lesson_id) ON DELETE CASCADE
 );
 
-
-
 CREATE TABLE certificate (
     cer_id      INT AUTO_INCREMENT PRIMARY KEY,
     learner_id  INT NOT NULL,
@@ -76,7 +77,6 @@ CREATE TABLE certificate (
     FOREIGN KEY (learner_id)    REFERENCES learner (learner_id) ON DELETE CASCADE,
     FOREIGN KEY (course_id)     REFERENCES course   (course_id) ON DELETE CASCADE,
     UNIQUE (learner_id, course_id)
-    
 );
 
 
@@ -104,14 +104,10 @@ INSERT INTO lesson (course_id, title, sec_no, duration_min) VALUES
 
 (1, 'Python Setup & Basic Syntax', 1, 25),
 (1, 'Control Structures & Loops', 2, 40),
-
 (2, 'Lists, Stacks, and Queues', 1, 50),
 (2, 'Binary Trees & Recursion', 2, 60),
-
 (3, 'Supervised Learning & Regression', 1, 90),
-
 (4, 'Wireframing & Prototyping in Figma', 1, 45),
-
 (5, 'Relational Database & ER-Diagram', 1, 35),
 (5, 'SQL Queries & Joins', 2, 55);
 

@@ -265,7 +265,7 @@ async function loadOptions(fields, forSearch) {
       });
       f.options = [...seen.values()];
     } else {
-      f.options = [{ value: "", label: (r.todo ? "🚧 " : "⚠️ ") + r.error }];
+      f.options = [{ value: "", label: r.error }];
     }
     if (forSearch && r.ok) f.options.unshift({ value: "", label: "ทั้งหมด" });
     else if (f.allowEmpty && r.ok) f.options.unshift({ value: "", label: "ไม่มี" });
@@ -290,7 +290,7 @@ async function doSearch() {
 function renderTable(r) {
   const head = $("#tableHead"), body = $("#tableBody"), st = $("#status");
   head.innerHTML = ""; body.innerHTML = "";
-  if (!r.ok) { setStatus(st, (r.todo ? "🚧 " : "⚠️ ") + r.error, r.todo ? "todo" : "err"); return; }
+  if (!r.ok) { setStatus(st, r.error, r.todo ? "todo" : "err"); return; }
   const rows = r.data || [];
   if (rows.length === 0) { setStatus(st, "ไม่พบข้อมูล"); return; }
   setStatus(st, "พบ " + rows.length + " รายการ");
@@ -313,20 +313,20 @@ function collectForm() { const d = {}; formFields().filter(f => f.key).forEach(f
 async function editRow(id) {
   const cfg = ENTITIES[current];
   const r = await api(cfg.api + "/" + id);
-  if (!r.ok) { alert((r.todo ? "🚧 " : "⚠️ ") + r.error); return; }
+  if (!r.ok) { alert(r.error); return; }
   editingId = id; openForm("แก้ไขข้อมูล", r.data);
 }
 async function deleteRow(id) {
   if (!confirm("ยืนยันการลบ?")) return;
   const r = await api(ENTITIES[current].api + "/" + id, { method: "DELETE" });
-  if (!r.ok) { alert((r.todo ? "🚧 " : "⚠️ ") + r.error); return; }
+  if (!r.ok) { alert(r.error); return; }
   doSearch();
 }
 async function save() {
   const cfg = ENTITIES[current], data = collectForm();
   const opts = { method: editingId ? "PUT" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) };
   const r = await api(editingId ? cfg.api + "/" + editingId : cfg.api, opts);
-  if (!r.ok) { alert((r.todo ? "🚧 " : "⚠️ ") + r.error); return; }
+  if (!r.ok) { alert(r.error); return; }
   $("#modal").classList.add("hidden"); doSearch();
 }
 document.querySelectorAll(".tab").forEach(t => t.addEventListener("click", () => {

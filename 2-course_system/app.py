@@ -154,5 +154,12 @@ def report_run(key):
     return jsonify({"ok": False, "error": f"ไม่พบรายงาน '{key}' ใน db.REPORTS"}), 404
 
 
+@app.route("/api/simulate", methods=["POST"])
+def simulate_action():
+    """จำลองเหตุการณ์: บอกผลลัพธ์ถ้าทำ action นี้ โดยไม่แก้ข้อมูลจริง"""
+    body = request.json or {}
+    return safe(db.simulate, body.get("action"), body.get("params"))
+
+
 if __name__ == "__main__":
     app.run(debug=True, port=5000)
