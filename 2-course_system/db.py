@@ -550,7 +550,7 @@ def update_certificate(cer_id, data):
         raise ValueError("ผู้เรียนคนนี้มีใบรับรองของคอร์สนี้แล้ว")
 
     issue_date = blank_to_none(data.get("issue_date"))
-    if issue_date is None:   # ไม่ได้กรอกวันที่ → คงวันที่ออกเดิมไว้
+    if issue_date is None:   
         old = get_certificate(cer_id)
         if not old:
             raise ValueError("ไม่พบใบรับรอง")
